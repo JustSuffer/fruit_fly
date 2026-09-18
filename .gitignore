@@ -1,0 +1,16 @@
+# Python & Virtualenv
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Data cache (only include bundle.json for Vercel, ignore raw multi-megabyte numpy archives)
+data/cache/
+data/test_cache/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
