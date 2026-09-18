@@ -1,0 +1,9 @@
+.venv
+data/cache
+data/test_cache
+data/checkpoints
+tests
+export_vercel_bundle.py
+pretrain.py
+run.py
+requirements-local.txt

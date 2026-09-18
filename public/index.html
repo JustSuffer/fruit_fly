@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drosophila Connectome Blackjack | LIF Reservoir Computing</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- Three.js & OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🪰</div>
+      <div>
+        <div class="brand-title">Drosophila Connectome RL</div>
+        <div style="font-size: 11px; color: #94a3b8;">Frozen Biological Reservoir • Leaky Integrate-and-Fire</div>
+      </div>
+      <span class="badge">FlyWire / MaleCNS</span>
+    </div>
+
+    <div style="display: flex; gap: 20px; align-items: center;">
+      <div style="font-size: 12px; color: #94a3b8;">
+        Neurons: <strong id="metaNeurons" style="color: #38bdf8;">12,000</strong> | 
+        Synapses: <strong id="metaSynapses" style="color: #38bdf8;">360,000</strong>
+      </div>
+      <div class="status-pill">
+        <div class="dot-green"></div>
+        <span id="wsStatus">CONNECTING</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Split Layout -->
+  <div class="app-container">
+
+    <!-- 3D WebGL Connectome Visualizer -->
+    <div class="visualizer-pane">
+      <div id="canvas3d"></div>
+
+      <!-- Neuropil Overlay Legend -->
+      <div class="viz-overlay">
+        <div class="viz-card">
+          <h4>Neuropil Architecture</h4>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #06b6d4;"></div>
+            <span>Antennal Lobe / Sensory (ORN)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #a855f7;"></div>
+            <span>Mushroom Body (Kenyon Cells)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #10b981;"></div>
+            <span>Central Complex (EB / PB / FB)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #38bdf8;"></div>
+            <span>Protocerebrum (Interneurons)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color" style="background: #f59e0b;"></div>
+            <span>Descending Motor Neurons (DN)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Camera Preset Controls -->
+      <div class="viz-controls">
+        <button class="btn-viz" data-cam="reset">Reset Orbit</button>
+        <button class="btn-viz" data-cam="frontal">Sensory View</button>
+        <button class="btn-viz" data-cam="dorsal">Mushroom Body</button>
+        <button class="btn-viz" data-cam="sagittal">Sagittal Profile</button>
+      </div>
+    </div>
+
+    <!-- Right Sidebar: Blackjack & Decision HUD -->
+    <div class="sidebar-pane">
+
+      <!-- Casino Card Table -->
+      <div class="section-box">
+        <div class="section-header">
+          <span class="section-title">Dealer Hand</span>
+          <span id="dealerTotal" class="hand-total">Showing: --</span>
+        </div>
+        <div id="dealerCards" class="card-container">
+          <div class="playing-card hidden"></div>
+          <div class="playing-card hidden"></div>
+        </div>
+
+        <div class="section-header" style="margin-top: 16px;">
+          <span class="section-title">Player Hand</span>
+          <span id="playerTotal" class="hand-total">Total: --</span>
+        </div>
+        <div id="playerCards" class="card-container">
+          <div class="playing-card hidden"></div>
+          <div class="playing-card hidden"></div>
+        </div>
+
+        <div id="gameResult" style="margin-top: 12px; font-weight: 700; font-size: 13px; text-align: center;">
+          Biological Reservoir Active
+        </div>
+      </div>
+
+      <!-- Biological Decision HUD -->
+      <div class="section-box">
+        <div class="section-header">
+          <span class="section-title">Connectome Policy Readout</span>
+          <span style="font-size: 11px; color: #94a3b8;">Q-Learning on DNs</span>
+        </div>
+
+        <div class="decision-card">
+          <div class="decision-box">
+            <div class="decision-label">Connectome Choice</div>
+            <div id="recAction" class="decision-val val-hit">--</div>
+          </div>
+          <div class="decision-box">
+            <div class="decision-label">Optimal Basic Strat</div>
+            <div id="recOptimal" class="decision-val" style="color: #38bdf8;">--</div>
+          </div>
+        </div>
+
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">
+          Decision Confidence: <strong id="confidenceVal" style="color: #38bdf8;">--%</strong>
+        </div>
+
+        <!-- Q-Value Energy Bars -->
+        <div class="q-bars">
+          <div class="q-row">
+            <span>Q(Stand)</span>
+            <strong id="qStandVal">0.000</strong>
+          </div>
+          <div class="progress-track">
+            <div id="qStandBar" class="progress-fill" style="width: 50%; background: #10b981;"></div>
+          </div>
+
+          <div class="q-row">
+            <span>Q(Hit)</span>
+            <strong id="qHitVal">0.000</strong>
+          </div>
+          <div class="progress-track">
+            <div id="qHitBar" class="progress-fill" style="width: 50%; background: #f59e0b;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Player & Agent Controls -->
+      <div class="section-box">
+        <span class="section-title">Control Terminal</span>
+
+        <div class="action-buttons">
+          <button id="btnHit" class="btn btn-hit">HIT (+ Card)</button>
+          <button id="btnStand" class="btn btn-stand">STAND</button>
+          <button id="btnAutoStep" class="btn btn-auto">🧠 Play Connectome Move</button>
+          <button id="btnNewHand" class="btn btn-new">Deal New Hand</button>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button id="btnAutoPlay" class="btn" style="flex: 1; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; color: #60a5fa; font-size: 12px; padding: 8px;">
+            START AUTOPLAY
+          </button>
+          <button id="btnTrain" class="btn" style="flex: 1; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #c084fc; font-size: 12px; padding: 8px;">
+            ⚡ Train 1,000 Hands
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Session Statistics -->
+      <div class="section-box">
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div id="statWins" class="stat-num" style="color: #10b981;">0</div>
+            <div class="stat-title">WINS</div>
+          </div>
+          <div class="stat-item">
+            <div id="statLosses" class="stat-num" style="color: #ef4444;">0</div>
+            <div class="stat-title">LOSSES</div>
+          </div>
+          <div class="stat-item">
+            <div id="statPushes" class="stat-num" style="color: #f59e0b;">0</div>
+            <div class="stat-title">PUSHES</div>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 8px; font-size: 12px; color: #94a3b8;">
+          Session Win Rate: <strong id="statWinRate" style="color: #38bdf8;">0.0%</strong>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/visualizer3d.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

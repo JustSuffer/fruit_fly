@@ -1,21 +1,8 @@
 {
-  "version": 2,
   "rewrites": [
     {
-      "source": "/api/:path*",
+      "source": "/api/(.*)",
       "destination": "/api/index.py"
-    },
-    {
-      "source": "/css/:path*",
-      "destination": "/static/css/:path*"
-    },
-    {
-      "source": "/js/:path*",
-      "destination": "/static/js/:path*"
-    },
-    {
-      "source": "/",
-      "destination": "/static/index.html"
     }
   ]
 }
