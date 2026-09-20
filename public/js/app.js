@@ -168,7 +168,8 @@ class FlyJackMaster {
 
     this.trialNumber++;
     this.hudTrial.innerText = this.trialNumber;
-    this.hudStateTitle.innerText = "Dealing";
+    this.hudStateTitle.innerText = "Dealing...";
+    this.hudStateTitle.style.color = "#ffffff";
     this.audio.playChip();
 
     try {
@@ -176,19 +177,29 @@ class FlyJackMaster {
       const data = await res.json();
       this.gameState = data;
 
-      this.audio.playCardDeal();
-      this.table3d.renderCards(data.player_cards, data.dealer_cards);
+      const is21 = data.is_21 || data.player_total === 21;
+
+      // Deal fresh cards sliding from the card shoe
+      this.table3d.renderCards(data.player_cards, data.dealer_cards, true);
+      this.table3d.update3DScores(data.player_total, data.dealer_total, is21, data.done);
       this.updateHUD(data);
 
       if (this.cns3d && this.cns3d.triggerBiologicalWave) {
         this.cns3d.triggerBiologicalWave();
       }
 
-      // Next step: Fly's autonomous turn
-      const delay = 900 / this.speedMultiplier;
-      this.timerId = setTimeout(() => {
-        this.executeFlyDecision();
-      }, delay);
+      if (data.done) {
+        // Natural 21 Blackjack on deal!
+        setTimeout(() => {
+          this.handleRoundFinish(data);
+        }, 900);
+      } else {
+        // Next step: Fly's autonomous turn
+        const delay = 950 / this.speedMultiplier;
+        this.timerId = setTimeout(() => {
+          this.executeFlyDecision();
+        }, delay);
+      }
 
     } catch (err) {
       console.error("[FlyJack] Deal error:", err);
@@ -200,7 +211,7 @@ class FlyJackMaster {
     this.isStepping = true;
 
     const chosenAction = this.gameState.recommended_action || "HIT";
-    this.hudStateTitle.innerText = `Fly Deciding (${chosenAction})`;
+    this.hudStateTitle.innerText = `Fly Deciding: ${chosenAction}`;
 
     // Trigger CNS Brain Spikes in PiP window
     if (this.cns3d && this.cns3d.triggerBiologicalWave) {
@@ -218,8 +229,11 @@ class FlyJackMaster {
         this.gameState = data;
         this.isStepping = false;
 
-        this.audio.playCardDeal();
-        this.table3d.renderCards(data.player_cards, data.dealer_cards);
+        const is21 = data.is_21 || data.player_total === 21;
+
+        // Smooth incremental dealing (only slides the newly drawn card)
+        this.table3d.renderCards(data.player_cards, data.dealer_cards, false);
+        this.table3d.update3DScores(data.player_total, data.dealer_total, is21, data.done);
         this.updateHUD(data);
 
         if (data.done) {
@@ -242,7 +256,7 @@ class FlyJackMaster {
       return;
     }
 
-    // Physical Drosophila Body Movement
+    // Physical Drosophila Body Movement - Fly acts as the real physical player!
     if (chosenAction === "HIT") {
       this.audio.playLegTap();
       this.table3d.triggerForelegTap(() => {
@@ -256,20 +270,36 @@ class FlyJackMaster {
   }
 
   handleRoundFinish(data) {
+    const is21 = data.is_21 || data.player_total === 21;
+    const isBJ = data.is_blackjack;
+
     if (data.reward > 0) {
-      this.bankroll += 10;
+      const winAmount = isBJ ? 15 : 10;
+      this.bankroll += winAmount;
       this.stats.w++;
-      this.hudStateTitle.innerText = "Fly Wins! (+10)";
-      this.hudStateTitle.style.color = "#34d399";
+      if (isBJ) {
+        this.hudStateTitle.innerHTML = `<span class="badge-blackjack-21">★ 21 BLACKJACK! (+15) ★</span>`;
+        this.hudStateTitle.style.color = "#34d399";
+      } else if (is21) {
+        this.hudStateTitle.innerHTML = `<span class="badge-21">★ 21 WIN! (+10) ★</span>`;
+        this.hudStateTitle.style.color = "#34d399";
+      } else {
+        this.hudStateTitle.innerText = `Fly Wins! (+${winAmount})`;
+        this.hudStateTitle.style.color = "#34d399";
+      }
       this.audio.playWin();
     } else if (data.reward < 0) {
       this.bankroll -= 10;
       this.stats.l++;
-      this.hudStateTitle.innerText = "Dealer Wins (-10)";
+      if (data.player_total > 21) {
+        this.hudStateTitle.innerText = `Fly Busts (${data.player_total}) - Dealer Wins`;
+      } else {
+        this.hudStateTitle.innerText = "Dealer Wins (-10)";
+      }
       this.hudStateTitle.style.color = "#f87171";
     } else {
       this.stats.d++;
-      this.hudStateTitle.innerText = "Push (Tie)";
+      this.hudStateTitle.innerText = is21 ? "Push (Both 21)" : "Push (Tie)";
       this.hudStateTitle.style.color = "#fbbf24";
       this.audio.playChip();
     }
@@ -278,7 +308,7 @@ class FlyJackMaster {
 
     // Auto-play next hand
     if (this.autoPlay) {
-      const waitTime = 1800 / this.speedMultiplier;
+      const waitTime = 2100 / this.speedMultiplier;
       this.timerId = setTimeout(() => {
         this.dealNewHand();
       }, waitTime);
@@ -289,6 +319,8 @@ class FlyJackMaster {
     const pTotal = data.player_total || (data.player_cards ? data.player_cards.reduce((a, b) => a + b, 0) : 12);
     const dUpcard = data.dealer_upcard || 7;
     const isAce = data.usable_ace || false;
+    const is21 = data.is_21 || pTotal === 21;
+    const isBJ = data.is_blackjack;
 
     // Biological Glomeruli Frequencies (DA1, VA1d, VA1v)
     const da1 = Math.min(150, Math.max(20, Math.round(50 + pTotal * 4.2)));
@@ -313,14 +345,14 @@ class FlyJackMaster {
     this.barQStick.style.width = `${normStick}%`;
     this.barQHit.style.width = `${normHit}%`;
 
-    // Decisions
+    // Decisions & 21 Banner
     const act = data.next_recommendation || data.recommended_action || data.action_taken || "HIT";
     const opt = data.optimal_action || "HIT";
 
-    this.flyDecision.innerText = act;
-    this.optDecision.innerText = opt;
+    this.flyDecision.innerText = is21 ? "21 (STAND)" : act;
+    this.optDecision.innerText = is21 ? "STAND" : opt;
 
-    if (act === opt) {
+    if (act === opt || is21) {
       this.badgeMatch.innerText = "✓ matches";
       this.badgeMatch.className = "badge-match";
     } else {

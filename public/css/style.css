@@ -379,46 +379,68 @@ body.flyjack-body {
   pointer-events: none;
 }
 
-/* Picture-in-Picture CNS Brain Window (FlyHard CNS Activity) */
+/* Picture-in-Picture CNS Brain Window (Matching Photo 1: Paint the Brain) */
 .cns-pip-window {
   position: absolute;
   top: 16px;
   right: 24px;
-  width: 380px;
-  height: 280px;
-  background: rgba(10, 14, 22, 0.95);
+  width: 390px;
+  height: 350px;
+  background: rgba(13, 17, 23, 0.96);
   backdrop-filter: blur(14px);
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
   z-index: 40;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.pip-header {
-  height: 32px;
-  background: rgba(20, 27, 40, 0.85);
+.pip-header-photo1 {
+  height: 44px;
+  background: rgba(18, 24, 34, 0.92);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #38bdf8;
+  padding: 0 14px;
+  flex-shrink: 0;
 }
 
-.pip-badges {
+.pip-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.2px;
+}
+
+.pip-sub {
+  font-size: 10.5px;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+
+.pip-right-controls {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.badge-sub {
-  font-size: 10px;
-  color: #94a3b8;
-  font-weight: normal;
+.pip-dropdown-label {
+  font-size: 11px;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 3px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pip-dropdown-label:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 .btn-close-pip {
@@ -426,32 +448,118 @@ body.flyjack-body {
   border: none;
   color: #64748b;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s ease;
 }
 
 .btn-close-pip:hover {
-  color: white;
+  color: #ffffff;
 }
 
-.cns-rate-legend {
-  position: absolute;
-  bottom: 8px;
-  right: 12px;
+/* Legend at bottom of CNS window matching Photo 1 */
+.cns-photo1-legend {
+  height: 28px;
+  background: rgba(13, 17, 23, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: #94a3b8;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 2px 6px;
-  border-radius: 4px;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
-.rate-gradient {
-  width: 50px;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(to right, #06b6d4, #f59e0b, #ffffff);
+.legend-dots {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #94a3b8;
+}
+
+.legend-dots span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dot-color {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-resting {
+  background-color: #3b4861; /* Slate Blue */
+  box-shadow: 0 0 5px rgba(59, 72, 97, 0.8);
+}
+
+.dot-stimulated {
+  background-color: #8b5cf6; /* Vibrant Violet */
+  box-shadow: 0 0 7px rgba(139, 92, 246, 0.8);
+}
+
+.dot-firing {
+  background-color: #fbbf24; /* Golden Amber */
+  box-shadow: 0 0 9px rgba(251, 191, 36, 0.9);
+}
+
+.legend-axis {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 17px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+/* Tooltip hovering over brain neurons matching Photo 1 */
+.brain-tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 6px;
+  padding: 6px 10px;
+  pointer-events: none;
+  z-index: 60;
+  font-size: 11px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+}
+
+/* 21 / Blackjack Badges */
+.badge-blackjack-21 {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.badge-21 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
 }
 
 /* Modal */

@@ -68,20 +68,28 @@
     <!-- Primary 3D Blackjack Table Scene (Green Felt, 3D Drosophila Fly, Cards, Chips) -->
     <div id="table3d-container" class="scene-container active"></div>
 
-    <!-- Secondary CNS Brain Connectome Visualizer (Picture-in-Picture or Split View) -->
-    <div id="cns-container" class="cns-pip-window hidden">
-      <div class="pip-header">
-        <span>CNS / RECORDED MODEL ACTIVITY</span>
-        <div class="pip-badges">
-          <span class="badge-sub">140,024 annotated somata</span>
-          <button id="btnClosePip" class="btn-close-pip">✕</button>
+    <!-- Secondary CNS Brain Connectome Visualizer (Matching Photo 1: Paint the brain) -->
+    <div id="cns-container" class="cns-pip-window">
+      <div class="pip-header-photo1">
+        <div>
+          <div class="pip-title">Paint the brain</div>
+          <div class="pip-sub">43,150 neurons selected</div>
+        </div>
+        <div class="pip-right-controls">
+          <span class="pip-dropdown-label">Brain + nerve cord ▾</span>
+          <button id="btnClosePip" class="btn-close-pip" title="Minimize">✕</button>
         </div>
       </div>
-      <div id="cns3d-canvas" style="width: 100%; height: calc(100% - 32px);"></div>
-      <div class="cns-rate-legend">
-        <span>+ rate</span>
-        <div class="rate-gradient"></div>
-        <span>- rate</span>
+      
+      <div id="cns3d-canvas" style="width: 100%; height: calc(100% - 70px);"></div>
+      
+      <div class="cns-photo1-legend">
+        <div class="legend-dots">
+          <span><span class="dot-color dot-resting"></span> Resting</span>
+          <span><span class="dot-color dot-stimulated"></span> Stimulated</span>
+          <span><span class="dot-color dot-firing"></span> Firing</span>
+        </div>
+        <span class="legend-axis">R</span>
       </div>
     </div>
 

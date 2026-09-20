@@ -40,6 +40,29 @@ class TestAPI(unittest.TestCase):
         self.assertTrue(step_data["done"])
         self.assertIn("reward", step_data)
 
+    def test_vercel_serverless_endpoints(self):
+        from api.index import app as vercel_app
+        client = TestClient(vercel_app)
+
+        # 1. Metadata
+        meta_res = client.get("/api/connectome/metadata")
+        self.assertEqual(meta_res.status_code, 200)
+        self.assertTrue(meta_res.json()["is_serverless"])
+
+        # 2. New game
+        new_res = client.post("/api/game/new")
+        self.assertEqual(new_res.status_code, 200)
+        data = new_res.json()
+        self.assertIn("player_cards", data)
+        self.assertIn("is_21", data)
+
+        # 3. Step
+        step_res = client.post("/api/game/step", json={"action": "STAND"})
+        self.assertEqual(step_res.status_code, 200)
+        s_data = step_res.json()
+        self.assertTrue(s_data["done"])
+        self.assertIn("reward", s_data)
+
 
 if __name__ == "__main__":
     unittest.main()

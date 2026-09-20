@@ -76,6 +76,34 @@ def new_game():
 
     p_sum, p_ace = calc_hand(p_cards)
     d_upcard = d_cards[0]
+    d_sum, d_ace = calc_hand(d_cards)
+
+    # Check for immediate 21 Natural Blackjack
+    if p_sum == 21:
+        done = True
+        if d_sum == 21:
+            reward = 0.0
+            msg = "Push (Both have 21 Blackjack!)"
+        else:
+            reward = 1.5
+            msg = "BLACKJACK! 21 Win!"
+        return {
+            "player_cards": p_cards,
+            "dealer_cards": d_cards,
+            "dealer_upcard": d_upcard,
+            "player_total": 21,
+            "dealer_total": d_sum,
+            "usable_ace": p_ace,
+            "recommended_action": "STAND",
+            "optimal_action": "STAND",
+            "q_values": {"STAND": 1.0, "HIT": -1.0},
+            "confidence": 1.0,
+            "done": True,
+            "reward": reward,
+            "result_message": msg,
+            "is_21": True,
+            "is_blackjack": True,
+        }
 
     key = f"{p_sum}_{d_upcard}_{int(p_ace)}"
     decision = BUNDLE_DATA["states"].get(key, {
@@ -100,6 +128,8 @@ def new_game():
         },
         "confidence": decision["confidence"],
         "done": False,
+        "is_21": False,
+        "is_blackjack": False,
     }
 
 
@@ -137,13 +167,48 @@ def step_game(req: StepReq):
                 "dealer_total": sum(d_cards),
                 "reward": -1.0,
                 "done": True,
-                "result_message": "Player Busts",
+                "result_message": "Player Busts (>21)",
                 "q_values": {"STAND": decision["q_stand"], "HIT": decision["q_hit"]},
                 "next_recommendation": None,
+                "is_21": False,
+                "is_blackjack": False,
+            }
+        elif new_sum == 21:
+            # Player hits 21! Stand automatically and dealer draws
+            d_sum, d_ace = calc_hand(d_cards)
+            while d_sum < 17:
+                d_cards.append(draw_card())
+                d_sum, d_ace = calc_hand(d_cards)
+
+            if d_sum == 21:
+                reward = 0.0
+                msg = "Push (Both have 21)"
+            else:
+                reward = 1.0
+                msg = "Player Hit 21! Player Wins!"
+
+            return {
+                "action_taken": "HIT",
+                "player_cards": p_cards,
+                "dealer_cards": d_cards,
+                "player_total": 21,
+                "dealer_total": d_sum,
+                "reward": reward,
+                "done": True,
+                "result_message": msg,
+                "q_values": {"STAND": 1.0, "HIT": -1.0},
+                "next_recommendation": None,
+                "is_21": True,
+                "is_blackjack": False,
             }
         else:
             next_key = f"{new_sum}_{d_upcard}_{int(new_ace)}"
-            next_dec = BUNDLE_DATA["states"].get(next_key, {"action": "STAND" if new_sum >= 17 else "HIT"})
+            next_dec = BUNDLE_DATA["states"].get(next_key, {
+                "action": "STAND" if new_sum >= 17 else "HIT",
+                "optimal": "STAND" if new_sum >= 17 else "HIT",
+                "q_stand": 0.0,
+                "q_hit": 0.0,
+            })
             return {
                 "action_taken": "HIT",
                 "player_cards": p_cards,
@@ -153,8 +218,10 @@ def step_game(req: StepReq):
                 "reward": 0.0,
                 "done": False,
                 "result_message": "Player Hits",
-                "q_values": {"STAND": decision["q_stand"], "HIT": decision["q_hit"]},
+                "q_values": {"STAND": next_dec.get("q_stand", 0.0), "HIT": next_dec.get("q_hit", 0.0)},
                 "next_recommendation": next_dec["action"],
+                "is_21": False,
+                "is_blackjack": False,
             }
     else:  # STAND
         d_sum, d_ace = calc_hand(d_cards)
@@ -186,6 +253,8 @@ def step_game(req: StepReq):
             "result_message": msg,
             "q_values": {"STAND": decision["q_stand"], "HIT": decision["q_hit"]},
             "next_recommendation": None,
+            "is_21": p_sum == 21,
+            "is_blackjack": len(p_cards) == 2 and p_sum == 21,
         }
 
 

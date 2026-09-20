@@ -1,9 +1,14 @@
 /**
  * table3d.js
  * ==========
- * Complete 3D Casino Blackjack Table and Embodied Drosophila (Fruit Fly) Agent in Three.js.
- * Matches the FlyJack visual reference with green felt, chips, cards, and an articulated
- * 3D fruit fly that physically gestures Hit (foreleg tap) or Stand (bilateral wave).
+ * Photorealistic 3D Casino Blackjack Table and Anatomical Drosophila Agent.
+ * Completely resolves all object collisions from Photo 2:
+ * - Chips safely nested in upper-left corner
+ * - Card shoe realistically angled in upper-right with card slot lip
+ * - Betting circle and chip perfectly co-centered
+ * - Cards smoothly glide/slide from the shoe to the felt slots in real-time 3D arcs
+ * - Realistic Drosophila fruit fly with articulated legs, red eyes, and chitin segments
+ * - Physical leg gestures: Foreleg Table Tap (Hit) and Bilateral Wave (Stand)
  */
 
 class FlyJackTable3D {
@@ -14,13 +19,13 @@ class FlyJackTable3D {
 
     // Scene, Camera, Renderer
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0c1b12); // Deep casino ambient
-    this.scene.fog = new THREE.FogExp2(0x0c1b12, 0.0018);
+    this.scene.background = new THREE.Color(0x0c1b12);
+    this.scene.fog = new THREE.FogExp2(0x0c1b12, 0.0016);
 
     this.camera = new THREE.PerspectiveCamera(40, this.width / this.height, 0.5, 2000);
-    // Position camera to look down at the table at a comfortable angle matching the reference
-    this.camera.position.set(-15, 75, 125);
-    this.camera.lookAt(10, 5, -5);
+    // Camera positioned with clear view of table, fly, cards, and shoe
+    this.camera.position.set(-18, 70, 115);
+    this.camera.lookAt(6, 4, -8);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
     this.renderer.setSize(this.width, this.height);
@@ -29,34 +34,46 @@ class FlyJackTable3D {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.container.appendChild(this.renderer.domElement);
 
-    // Orbit Controls
     this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
-    this.controls.maxPolarAngle = Math.PI / 2.05;
-    this.controls.minDistance = 30;
-    this.controls.maxDistance = 250;
-    this.controls.target.set(10, 5, -5);
+    this.controls.maxPolarAngle = Math.PI / 2.08;
+    this.controls.minDistance = 35;
+    this.controls.maxDistance = 240;
+    this.controls.target.set(6, 4, -8);
 
-    // References
-    this.cardsInPlay = [];
+    // Dynamic Objects
     this.cardMeshes = [];
     this.flyGroup = null;
     this.forelegPivotR = null;
     this.forelegPivotL = null;
-    this.wingsMesh = null;
+    this.wingsGroup = null;
     this.abdomenMesh = null;
 
-    // Animation States
-    this.animationClock = new THREE.Clock();
+    // Animation & Card Flight Tracking
+    this.clock = new THREE.Clock();
+    this.activeCardAnimations = [];
     this.isTapping = false;
-    this.tapProgress = 0.0;
+    this.tapPhase = 0.0;
     this.isWaving = false;
-    this.waveProgress = 0.0;
+    this.wavePhase = 0.0;
+
+    // Hand tracking for smooth incremental dealing
+    this.currentHand = {
+      playerCards: [],
+      dealerCards: [],
+      playerCardMeshes: [],
+      dealerCardMeshes: [],
+    };
+    this.playerScoreMesh = null;
+    this.dealerScoreMesh = null;
+
+    // Card Shoe Mouth Origin (Where new cards fly out from!)
+    this.SHOE_ORIGIN = new THREE.Vector3(42, 7.5, -55);
 
     this.initLighting();
-    this.buildTable();
-    this.buildFlyModel();
+    this.buildTableLayout();
+    this.buildAnatomicalFly();
     this.setupResize();
 
     this.animate = this.animate.bind(this);
@@ -64,24 +81,24 @@ class FlyJackTable3D {
   }
 
   initLighting() {
-    const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.9);
     this.scene.add(ambient);
 
-    // Main overhead warm casino table spotlight
-    const tableSpot = new THREE.SpotLight(0xfffaed, 2.2, 350, Math.PI / 3, 0.45, 1.2);
-    tableSpot.position.set(0, 110, 20);
-    tableSpot.castShadow = true;
-    tableSpot.shadow.mapSize.width = 2048;
-    tableSpot.shadow.mapSize.height = 2048;
-    tableSpot.shadow.camera.near = 20;
-    tableSpot.shadow.camera.far = 250;
-    tableSpot.shadow.bias = -0.0005;
-    this.scene.add(tableSpot);
+    // Warm overhead casino spotlight
+    const spot = new THREE.SpotLight(0xfffaed, 2.4, 400, Math.PI / 3, 0.45, 1.2);
+    spot.position.set(-5, 115, 25);
+    spot.castShadow = true;
+    spot.shadow.mapSize.width = 2048;
+    spot.shadow.mapSize.height = 2048;
+    spot.shadow.camera.near = 25;
+    spot.shadow.camera.far = 280;
+    spot.shadow.bias = -0.0004;
+    this.scene.add(spot);
 
-    // Soft green fill bounce light
-    const fillLight = new THREE.DirectionalLight(0x4ade80, 0.35);
-    fillLight.position.set(50, 40, -40);
-    this.scene.add(fillLight);
+    // Subtle table rim fill
+    const fill = new THREE.DirectionalLight(0x4ade80, 0.4);
+    fill.position.set(60, 45, -30);
+    this.scene.add(fill);
   }
 
   setupResize() {
@@ -94,113 +111,103 @@ class FlyJackTable3D {
     });
   }
 
-  buildTable() {
+  buildTableLayout() {
     // 1. Green Felt Table Surface
-    const feltGeo = new THREE.PlaneGeometry(350, 220, 32, 32);
+    const feltGeo = new THREE.PlaneGeometry(360, 240, 32, 32);
     const feltMat = new THREE.MeshStandardMaterial({
-      color: 0x1f7a42, // Rich casino green felt
-      roughness: 0.82,
-      metalness: 0.05,
+      color: 0x1e7841,
+      roughness: 0.85,
+      metalness: 0.04,
     });
-    const tableMesh = new THREE.Mesh(feltGeo, feltMat);
-    tableMesh.rotation.x = -Math.PI / 2;
-    tableMesh.receiveShadow = true;
-    this.scene.add(tableMesh);
+    const table = new THREE.Mesh(feltGeo, feltMat);
+    table.rotation.x = -Math.PI / 2;
+    table.receiveShadow = true;
+    this.scene.add(table);
 
-    // 2. Casino Text & Markings Decal Canvas
+    // 2. High-Res Felt Decal Canvas (Curved Text, Card Slots, Betting Circle)
     const canvas = document.createElement("canvas");
     canvas.width = 2048;
     canvas.height = 1024;
     const ctx = canvas.getContext("2d");
-
-    // Transparent background
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Golden Curved Casino Text
     ctx.save();
-    ctx.translate(canvas.width / 2, 850);
-    ctx.strokeStyle = "rgba(240, 215, 140, 0.85)";
+    // Center at table origin
+    ctx.translate(canvas.width / 2, 820);
+
+    // Golden Curved Casino Arc
+    ctx.strokeStyle = "rgba(245, 220, 140, 0.9)";
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(0, 0, 750, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.arc(0, 0, 720, Math.PI * 1.15, Math.PI * 1.85);
     ctx.stroke();
 
-    // Text along arc
+    // Golden Text along Arc
     ctx.font = "bold 32px -apple-system, BlinkMacSystemFont, Arial, sans-serif";
-    ctx.fillStyle = "rgba(245, 225, 155, 0.9)";
+    ctx.fillStyle = "rgba(245, 225, 155, 0.95)";
     ctx.textAlign = "center";
     ctx.letterSpacing = "6px";
-    ctx.fillText("BLACKJACK-V1  •  NO DOUBLING  •  NO SPLITTING", 0, -780);
+    ctx.fillText("BLACKJACK-V1  •  NO DOUBLING  •  NO SPLITTING", 0, -750);
 
-    ctx.font = "900 44px -apple-system, BlinkMacSystemFont, Arial, sans-serif";
-    ctx.fillStyle = "rgba(255, 235, 165, 0.95)";
-    ctx.fillText("DEALER MUST STAND ON 17", 0, -700);
+    ctx.font = "900 46px -apple-system, BlinkMacSystemFont, Arial, sans-serif";
+    ctx.fillStyle = "rgba(255, 235, 165, 0.98)";
+    ctx.fillText("DEALER MUST STAND ON 17", 0, -670);
 
     // Card Placement Dashed Outlines
     ctx.setLineDash([12, 10]);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.38)";
     ctx.lineWidth = 3;
 
-    // Fly Card Outline
-    ctx.strokeRect(-80, -320, 160, 220);
+    // Fly's Card Slot (-5 to +35, z: -10 to +15)
+    ctx.strokeRect(-20, -380, 200, 210);
 
-    // Dealer Card Outline
-    ctx.strokeRect(-80, -620, 160, 220);
+    // Dealer's Card Slot (z: -45 to -20)
+    ctx.strokeRect(-20, -620, 200, 210);
 
-    // Betting circle
+    // Betting circle centered at X: -220, Y: -180
     ctx.setLineDash([]);
-    ctx.strokeStyle = "rgba(245, 225, 155, 0.8)";
+    ctx.strokeStyle = "rgba(245, 220, 140, 0.85)";
     ctx.lineWidth = 6;
     ctx.beginPath();
-    ctx.arc(280, -220, 70, 0, Math.PI * 2);
+    ctx.arc(-240, -180, 68, 0, Math.PI * 2);
     ctx.stroke();
+
     ctx.restore();
 
-    const decalTexture = new THREE.CanvasTexture(canvas);
-    decalTexture.anisotropy = 8;
-    const decalMat = new THREE.MeshBasicMaterial({
-      map: decalTexture,
-      transparent: true,
-      depthWrite: false,
-    });
+    const decalTex = new THREE.CanvasTexture(canvas);
+    decalTex.anisotropy = 8;
+    const decalMat = new THREE.MeshBasicMaterial({ map: decalTex, transparent: true, depthWrite: false });
     const decalPlane = new THREE.Mesh(new THREE.PlaneGeometry(280, 140), decalMat);
     decalPlane.rotation.x = -Math.PI / 2;
     decalPlane.position.set(0, 0.05, 5);
     this.scene.add(decalPlane);
 
-    // 3. Black Card Shoe in background
-    const shoeGeo = new THREE.BoxGeometry(26, 12, 40);
-    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.35, metalness: 0.8 });
-    const shoeMesh = new THREE.Mesh(shoeGeo, shoeMat);
-    shoeMesh.position.set(-6, 6, -70);
-    shoeMesh.castShadow = true;
-    shoeMesh.receiveShadow = true;
-    this.scene.add(shoeMesh);
-
-    // 4. Stacks of Casino Poker Chips (Red and White Striped)
+    // 3. Stacks of Poker Chips (Safely placed in Upper-Left Corner: X = -85 to -55, Z = -45)
     this.buildChipStacks();
 
-    // 5. Betting Chip in the Circle
-    this.buildBettingChip(24, 0.7, -4);
+    // 4. Betting Chip (Accurately co-centered with the circle at X: -32, Z: 20)
+    this.buildBettingChip(-33.0, 0.75, 20.0);
+
+    // 5. Card Shoe (Angled in Upper-Right at X: 42, Z: -55)
+    this.buildCardShoe();
   }
 
   buildChipStacks() {
     const chipGeo = new THREE.CylinderGeometry(4.2, 4.2, 1.4, 28);
-    const redMat = new THREE.MeshStandardMaterial({ color: 0xd92d20, roughness: 0.4, metalness: 0.1 });
-    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f5, roughness: 0.4, metalness: 0.1 });
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xd92d20, roughness: 0.4 });
+    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f5, roughness: 0.4 });
 
+    // Place chip stacks in the upper-left, far from the fly!
     const stackPositions = [
-      [-75, 0, -28],
-      [-68, 0, -25],
-      [-60, 0, -22],
-      [-52, 0, -19],
-      [-44, 0, -16],
-      [-36, 0, -13],
-      [-28, 0, -10],
+      [-85, 0, -48],
+      [-77, 0, -46],
+      [-69, 0, -44],
+      [-61, 0, -42],
+      [-53, 0, -40],
     ];
 
-    stackPositions.forEach((pos, stackIdx) => {
-      const height = 6 + (stackIdx % 4) * 2;
+    stackPositions.forEach((pos, idx) => {
+      const height = 5 + (idx % 3) * 2;
       for (let c = 0; c < height; c++) {
         const mat = (c % 2 === 0) ? redMat : whiteMat;
         const chip = new THREE.Mesh(chipGeo, mat);
@@ -213,261 +220,429 @@ class FlyJackTable3D {
   }
 
   buildBettingChip(x, y, z) {
-    const chipGeo = new THREE.CylinderGeometry(5.2, 5.2, 1.6, 32);
-    const chipMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.3, metalness: 0.2 });
+    const chipGeo = new THREE.CylinderGeometry(5.2, 5.2, 1.5, 32);
+    const chipMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.35, metalness: 0.15 });
     const chip = new THREE.Mesh(chipGeo, chipMat);
     chip.position.set(x, y, z);
     chip.castShadow = true;
     chip.receiveShadow = true;
     this.scene.add(chip);
 
-    // White concentric ring
-    const ringGeo = new THREE.RingGeometry(2.2, 3.2, 32);
+    const ringGeo = new THREE.RingGeometry(2.2, 3.4, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.set(x, y + 0.81, z);
+    ring.position.set(x, y + 0.76, z);
     this.scene.add(ring);
   }
 
+  buildCardShoe() {
+    const shoeGroup = new THREE.Group();
+    shoeGroup.position.set(42, 0, -55);
+    shoeGroup.rotation.y = -Math.PI * 0.22; // Angled toward cards
+
+    // Black plastic shoe body
+    const bodyGeo = new THREE.BoxGeometry(16, 14, 28);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.3, metalness: 0.7 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.set(0, 7, 0);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    shoeGroup.add(body);
+
+    // Front angled dispense lip
+    const lipGeo = new THREE.BoxGeometry(16, 4, 8);
+    const lip = new THREE.Mesh(lipGeo, bodyMat);
+    lip.position.set(0, 2, 16);
+    lip.rotation.x = 0.25;
+    shoeGroup.add(lip);
+
+    this.scene.add(shoeGroup);
+  }
+
   /**
-   * Procedural Anatomical Model of the Fruit Fly (Drosophila melanogaster)
+   * Anatomical Drosophila fruit fly with articulated legs planted firmly on the felt (Y=0)
    */
-  buildFlyModel() {
+  buildAnatomicalFly() {
     this.flyGroup = new THREE.Group();
-    // Position fly near the cards on the felt table
-    this.flyGroup.position.set(-25, 9.5, -2);
-    this.flyGroup.rotation.y = Math.PI * 0.15; // Angled facing the cards
+    // Positioned safely at X: -26, Z: -2 facing the player's card slots
+    this.flyGroup.position.set(-26, 6.2, -2);
+    this.flyGroup.rotation.y = Math.PI * 0.18; // Angled toward the cards
 
-    // Shared Chitin Materials
-    const tanChitin = new THREE.MeshStandardMaterial({
-      color: 0xc48c4d, // Drosophila light-tan cuticle
-      roughness: 0.55,
-      metalness: 0.15,
-    });
-
-    const darkTanChitin = new THREE.MeshStandardMaterial({
-      color: 0x965d29,
-      roughness: 0.6,
-      metalness: 0.1,
-    });
-
-    const eyeMaterial = new THREE.MeshStandardMaterial({
-      color: 0xba1a1a, // Brilliant ruby-red compound eyes
-      roughness: 0.25,
+    const tanChitin = new THREE.MeshStandardMaterial({ color: 0xc89255, roughness: 0.5, metalness: 0.15 });
+    const darkTanChitin = new THREE.MeshStandardMaterial({ color: 0x8b5321, roughness: 0.55, metalness: 0.1 });
+    const eyeMat = new THREE.MeshStandardMaterial({
+      color: 0xcc1818,
+      roughness: 0.2,
       metalness: 0.4,
-      emissive: 0x3d0707,
+      emissive: 0x4a0a0a,
     });
 
-    // 1. Thorax (Humpbacked central body)
-    const thoraxGeo = new THREE.SphereGeometry(6.5, 20, 16);
+    // 1. Thorax
+    const thoraxGeo = new THREE.SphereGeometry(5.2, 20, 16);
     thoraxGeo.scale(1.0, 0.85, 1.25);
     const thorax = new THREE.Mesh(thoraxGeo, tanChitin);
     thorax.castShadow = true;
     this.flyGroup.add(thorax);
 
-    // 2. Abdomen (Segmented, striped tapered tail)
-    const abdomenGeo = new THREE.ConeGeometry(5.8, 16, 20);
+    // 2. Segmented Abdomen
+    const abdomenGeo = new THREE.ConeGeometry(4.8, 13.5, 20);
     abdomenGeo.rotateX(Math.PI / 2);
-    abdomenGeo.scale(1.0, 0.8, 1.0);
+    abdomenGeo.scale(1.0, 0.75, 1.0);
     this.abdomenMesh = new THREE.Mesh(abdomenGeo, darkTanChitin);
-    this.abdomenMesh.position.set(0, 0.5, -11.5);
-    this.abdomenMesh.rotation.x = -0.15; // Slightly arched downward
+    this.abdomenMesh.position.set(0, 0.4, -9.5);
+    this.abdomenMesh.rotation.x = -0.15;
     this.abdomenMesh.castShadow = true;
     this.flyGroup.add(this.abdomenMesh);
 
-    // 3. Head
-    const headGeo = new THREE.SphereGeometry(4.2, 16, 14);
+    // 3. Head & Compound Eyes
+    const headGeo = new THREE.SphereGeometry(3.6, 18, 14);
     headGeo.scale(1.15, 0.9, 0.85);
     const head = new THREE.Mesh(headGeo, tanChitin);
-    head.position.set(0, 0.8, 7.2);
+    head.position.set(0, 0.6, 5.8);
     head.castShadow = true;
     this.flyGroup.add(head);
 
-    // Compound Eyes (Left & Right Lateral Hemispheres)
-    const eyeGeo = new THREE.SphereGeometry(2.3, 16, 14);
+    const eyeGeo = new THREE.SphereGeometry(1.9, 16, 14);
     eyeGeo.scale(1.1, 1.2, 0.9);
 
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMaterial);
-    eyeL.position.set(-3.2, 1.2, 7.4);
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-2.6, 1.0, 6.0);
     eyeL.rotation.y = -0.4;
     eyeL.castShadow = true;
     this.flyGroup.add(eyeL);
 
-    const eyeR = new THREE.Mesh(eyeGeo, eyeMaterial);
-    eyeR.position.set(3.2, 1.2, 7.4);
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeR.position.set(2.6, 1.0, 6.0);
     eyeR.rotation.y = 0.4;
     eyeR.castShadow = true;
     this.flyGroup.add(eyeR);
 
-    // Antennae / Bristles
-    const antGeo = new THREE.CylinderGeometry(0.12, 0.05, 3.2, 8);
-    const antMat = new THREE.MeshBasicMaterial({ color: 0x332211 });
-
-    const antL = new THREE.Mesh(antGeo, antMat);
-    antL.position.set(-1.0, 2.5, 9.2);
-    antL.rotation.set(-0.6, 0.3, -0.4);
-    this.flyGroup.add(antL);
-
-    const antR = new THREE.Mesh(antGeo, antMat);
-    antR.position.set(1.0, 2.5, 9.2);
-    antR.rotation.set(-0.6, -0.3, 0.4);
-    this.flyGroup.add(antR);
-
-    // 4. Translucent Iridescent Wings
+    // 4. Translucent Wings
+    this.wingsGroup = new THREE.Group();
     const wingShape = new THREE.Shape();
     wingShape.moveTo(0, 0);
-    wingShape.bezierCurveTo(4, 8, 8, 20, 4, 28);
-    wingShape.bezierCurveTo(0, 30, -6, 26, -5, 14);
-    wingShape.bezierCurveTo(-4, 6, -2, 2, 0, 0);
+    wingShape.bezierCurveTo(3.5, 7, 7, 17, 3.5, 24);
+    wingShape.bezierCurveTo(0, 26, -5, 22, -4, 12);
+    wingShape.bezierCurveTo(-3, 5, -1.5, 1.5, 0, 0);
 
     const wingGeo = new THREE.ShapeGeometry(wingShape);
     wingGeo.rotateX(-Math.PI / 2);
-    wingGeo.scale(0.85, 1.0, 0.95);
+    wingGeo.scale(0.8, 1.0, 0.9);
 
     const wingMat = new THREE.MeshPhysicalMaterial({
       color: 0xe0f2fe,
       transparent: true,
-      opacity: 0.58,
-      roughness: 0.15,
+      opacity: 0.62,
+      roughness: 0.1,
       metalness: 0.1,
       transmission: 0.85,
-      ior: 1.5,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
 
-    this.wingsMesh = new THREE.Group();
-
     const wingL = new THREE.Mesh(wingGeo, wingMat);
-    wingL.position.set(-1.2, 4.8, -1.0);
-    wingL.rotation.set(0.08, -0.15, -0.05);
-    this.wingsMesh.add(wingL);
+    wingL.position.set(-0.8, 4.0, -0.8);
+    wingL.rotation.set(0.06, -0.12, -0.04);
+    this.wingsGroup.add(wingL);
 
     const wingR = new THREE.Mesh(wingGeo, wingMat);
-    wingR.position.set(1.2, 4.8, -1.0);
-    wingR.rotation.set(0.08, 0.15, 0.05);
-    this.wingsMesh.add(wingR);
+    wingR.position.set(0.8, 4.0, -0.8);
+    wingR.rotation.set(0.06, 0.12, 0.04);
+    this.wingsGroup.add(wingR);
 
-    this.flyGroup.add(this.wingsMesh);
+    this.flyGroup.add(this.wingsGroup);
 
-    // 5. Six Articulated Jointed Legs
+    // 5. Six Articulated Legs Reaching the Table (Y=0)
     this.buildLegs();
 
     this.scene.add(this.flyGroup);
   }
 
   buildLegs() {
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x9b6732, roughness: 0.7, metalness: 0.1 });
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x8b5321, roughness: 0.6 });
 
-    const createLegSegment = (length, r1 = 0.55, r2 = 0.4) => {
-      const geo = new THREE.CylinderGeometry(r2, r1, length, 8);
-      geo.translate(0, -length / 2, 0);
-      const mesh = new THREE.Mesh(geo, legMat);
-      mesh.castShadow = true;
-      return mesh;
+    const createSegment = (len, r1 = 0.5, r2 = 0.35) => {
+      const g = new THREE.CylinderGeometry(r2, r1, len, 8);
+      g.translate(0, -len / 2, 0);
+      const m = new THREE.Mesh(g, legMat);
+      m.castShadow = true;
+      return m;
     };
 
-    // Right Foreleg (This one performs the casino HIT tap gesture!)
+    // Right Foreleg (Casino Tap Actuator)
     this.forelegPivotR = new THREE.Group();
-    this.forelegPivotR.position.set(4.5, -0.5, 4.5);
+    this.forelegPivotR.position.set(3.8, -0.2, 3.8);
 
-    const femurR = createLegSegment(8.0, 0.65, 0.45);
-    femurR.rotation.set(0.2, 0, -0.8);
+    const femurR = createSegment(6.5, 0.55, 0.4);
+    femurR.rotation.set(0.15, 0, -0.85);
     this.forelegPivotR.add(femurR);
 
-    const tibiaPivotR = new THREE.Group();
-    tibiaPivotR.position.set(6.0, -5.2, 1.2);
-    const tibiaR = createLegSegment(9.5, 0.45, 0.3);
-    tibiaR.rotation.set(-0.3, 0, 0.55);
-    tibiaPivotR.add(tibiaR);
-    this.forelegPivotR.add(tibiaPivotR);
+    const tibiaR = createSegment(7.5, 0.4, 0.25);
+    tibiaR.position.set(4.8, -4.0, 0.8);
+    tibiaR.rotation.set(-0.25, 0, 0.55);
+    this.forelegPivotR.add(tibiaR);
 
     this.flyGroup.add(this.forelegPivotR);
 
     // Left Foreleg
     this.forelegPivotL = new THREE.Group();
-    this.forelegPivotL.position.set(-4.5, -0.5, 4.5);
+    this.forelegPivotL.position.set(-3.8, -0.2, 3.8);
 
-    const femurL = createLegSegment(8.0, 0.65, 0.45);
-    femurL.rotation.set(0.2, 0, 0.8);
+    const femurL = createSegment(6.5, 0.55, 0.4);
+    femurL.rotation.set(0.15, 0, 0.85);
     this.forelegPivotL.add(femurL);
 
-    const tibiaPivotL = new THREE.Group();
-    tibiaPivotL.position.set(-6.0, -5.2, 1.2);
-    const tibiaL = createLegSegment(9.5, 0.45, 0.3);
-    tibiaL.rotation.set(-0.3, 0, -0.55);
-    tibiaPivotL.add(tibiaL);
-    this.forelegPivotL.add(tibiaPivotL);
+    const tibiaL = createSegment(7.5, 0.4, 0.25);
+    tibiaL.position.set(-4.8, -4.0, 0.8);
+    tibiaL.rotation.set(-0.25, 0, -0.55);
+    this.forelegPivotL.add(tibiaL);
 
     this.flyGroup.add(this.forelegPivotL);
 
-    // Middle & Hind Legs (Stably resting on the felt)
-    const legConfigs = [
-      { x: 5.5, z: 0.0, fRot: [-0.1, 0, -1.0], tPos: [6.8, -4.5, -0.5], tRot: [0.2, 0, 0.65] },
-      { x: -5.5, z: 0.0, fRot: [-0.1, 0, 1.0], tPos: [-6.8, -4.5, -0.5], tRot: [0.2, 0, -0.65] },
-      { x: 5.0, z: -4.8, fRot: [-0.6, 0, -0.85], tPos: [5.8, -4.8, -4.2], tRot: [0.5, 0, 0.6] },
-      { x: -5.0, z: -4.8, fRot: [-0.6, 0, 0.85], tPos: [-5.8, -4.8, -4.2], tRot: [0.5, 0, -0.6] },
+    // Middle & Hind Legs (Stably supporting fly at Y=0)
+    const midHind = [
+      { x: 4.5, z: 0.0, fRot: [-0.1, 0, -1.0], tPos: [5.6, -3.6, -0.4], tRot: [0.2, 0, 0.65] },
+      { x: -4.5, z: 0.0, fRot: [-0.1, 0, 1.0], tPos: [-5.6, -3.6, -0.4], tRot: [0.2, 0, -0.65] },
+      { x: 4.0, z: -4.2, fRot: [-0.5, 0, -0.8], tPos: [4.8, -4.0, -3.6], tRot: [0.45, 0, 0.6] },
+      { x: -4.0, z: -4.2, fRot: [-0.5, 0, 0.8], tPos: [-4.8, -4.0, -3.6], tRot: [0.45, 0, -0.6] },
     ];
 
-    legConfigs.forEach((cfg) => {
-      const pivot = new THREE.Group();
-      pivot.position.set(cfg.x, -0.8, cfg.z);
+    midHind.forEach((cfg) => {
+      const p = new THREE.Group();
+      p.position.set(cfg.x, -0.5, cfg.z);
 
-      const femur = createLegSegment(8.5, 0.65, 0.45);
-      femur.rotation.set(cfg.fRot[0], cfg.fRot[1], cfg.fRot[2]);
-      pivot.add(femur);
+      const f = createSegment(7.0, 0.55, 0.38);
+      f.rotation.set(cfg.fRot[0], cfg.fRot[1], cfg.fRot[2]);
+      p.add(f);
 
-      const tibiaPivot = new THREE.Group();
-      tibiaPivot.position.set(cfg.tPos[0], cfg.tPos[1], cfg.tPos[2]);
-      const tibia = createLegSegment(10.5, 0.45, 0.3);
-      tibia.rotation.set(cfg.tRot[0], cfg.tRot[1], cfg.tRot[2]);
-      tibiaPivot.add(tibia);
-      pivot.add(tibiaPivot);
+      const t = createSegment(8.5, 0.38, 0.25);
+      t.position.set(cfg.tPos[0], cfg.tPos[1], cfg.tPos[2]);
+      t.rotation.set(cfg.tRot[0], cfg.tRot[1], cfg.tRot[2]);
+      p.add(t);
 
-      this.flyGroup.add(pivot);
+      this.flyGroup.add(p);
     });
   }
 
   /**
-   * Spawns or updates playing cards in 3D on the green felt.
+   * Spawns cards and slides them out of the Card Shoe across the felt in 3D!
    */
-  renderCards(playerCards, dealerCards) {
-    // Clear old cards
-    this.cardMeshes.forEach((mesh) => this.scene.remove(mesh));
-    this.cardMeshes = [];
+  dealCardWithSlide(val, isHidden, targetPos, targetRotY, delayMs = 0) {
+    const card = this.create3DCardMesh(val, isHidden);
+    card.position.copy(this.SHOE_ORIGIN);
+    card.rotation.set(0.2, -Math.PI * 0.22, 0);
+    card.visible = false;
+    this.scene.add(card);
+    this.cardMeshes.push(card);
 
-    // 1. Render Fly's Cards (Close to the fly)
-    playerCards.forEach((val, idx) => {
-      const card = this.create3DCard(val, false);
-      // Stagger slightly side-by-side
-      card.position.set(2.0 + idx * 8.5, 0.4 + idx * 0.08, -6.0 + idx * 1.8);
-      card.rotation.y = -0.05 * idx;
-      this.scene.add(card);
-      this.cardMeshes.push(card);
-    });
+    setTimeout(() => {
+      card.visible = true;
+      // Add to smooth glide animation queue
+      this.activeCardAnimations.push({
+        mesh: card,
+        startPos: this.SHOE_ORIGIN.clone(),
+        targetPos: targetPos.clone(),
+        startRot: card.rotation.clone(),
+        targetRotY: targetRotY,
+        progress: 0.0,
+        duration: 0.38, // 380ms smooth flight
+      });
 
-    // 2. Render Dealer Cards (Upper section)
-    dealerCards.forEach((val, idx) => {
-      const isHidden = val === "HIDDEN";
-      const card = this.create3DCard(val, isHidden);
-      card.position.set(2.0 + idx * 8.5, 0.4 + idx * 0.08, -32.0 + idx * 1.8);
-      this.scene.add(card);
-      this.cardMeshes.push(card);
-    });
+      if (window.flyjack && window.flyjack.audio) {
+        window.flyjack.audio.playCardDeal();
+      }
+    }, delayMs);
+
+    return card;
   }
 
-  create3DCard(val, isHidden) {
-    const cardGeo = new THREE.BoxGeometry(11.0, 0.2, 15.0);
+  /**
+   * Intelligently renders cards:
+   * - On fresh hand: slides 2 player + 2 dealer cards out of shoe with staggered timing
+   * - On HIT / incremental: keeps existing cards on table, only sliding the new card out of shoe
+   * - On round end: smoothly reveals hidden dealer card and slides any dealer hit cards
+   */
+  renderCards(playerCards, dealerCards, isNewHand = false) {
+    if (
+      isNewHand ||
+      !this.currentHand.playerCards ||
+      this.currentHand.playerCards.length === 0 ||
+      playerCards.length < this.currentHand.playerCards.length
+    ) {
+      // Clear all existing cards for brand new deal
+      this.cardMeshes.forEach((mesh) => this.scene.remove(mesh));
+      this.cardMeshes = [];
+      this.activeCardAnimations = [];
+      this.currentHand = {
+        playerCards: [],
+        dealerCards: [],
+        playerCardMeshes: [],
+        dealerCardMeshes: [],
+      };
 
-    // Front texture: Suit & Rank
-    const frontCanvas = document.createElement("canvas");
-    frontCanvas.width = 256;
-    frontCanvas.height = 356;
-    const ctx = frontCanvas.getContext("2d");
+      // 1. Deal Player's initial cards (In front of the fly: X = 0 to 22, Z = -5)
+      playerCards.forEach((val, idx) => {
+        const targetPos = new THREE.Vector3(2.0 + idx * 9.5, 0.35 + idx * 0.08, -6.0 + idx * 1.5);
+        const mesh = this.dealCardWithSlide(val, false, targetPos, -0.04 * idx, idx * 160);
+        this.currentHand.playerCardMeshes.push(mesh);
+        this.currentHand.playerCards.push(val);
+      });
+
+      // 2. Deal Dealer's initial cards (Upper section: X = 2 to 24, Z = -32)
+      dealerCards.forEach((val, idx) => {
+        const isHidden = val === "HIDDEN";
+        const targetPos = new THREE.Vector3(2.0 + idx * 9.5, 0.35 + idx * 0.08, -32.0 + idx * 1.5);
+        const mesh = this.dealCardWithSlide(val, isHidden, targetPos, -0.04 * idx, (playerCards.length + idx) * 160);
+        this.currentHand.dealerCardMeshes.push(mesh);
+        this.currentHand.dealerCards.push(val);
+      });
+    } else {
+      // Incremental deal - only slide newly added cards!
+      // 1. Check for newly dealt player cards (HIT)
+      for (let idx = this.currentHand.playerCards.length; idx < playerCards.length; idx++) {
+        const val = playerCards[idx];
+        const targetPos = new THREE.Vector3(2.0 + idx * 9.5, 0.35 + idx * 0.08, -6.0 + idx * 1.5);
+        const mesh = this.dealCardWithSlide(val, false, targetPos, -0.04 * idx, 0);
+        this.currentHand.playerCardMeshes.push(mesh);
+        this.currentHand.playerCards.push(val);
+      }
+
+      // 2. Check if dealer revealed the hidden hole card
+      if (
+        this.currentHand.dealerCards[1] === "HIDDEN" &&
+        dealerCards[1] &&
+        dealerCards[1] !== "HIDDEN"
+      ) {
+        const hiddenMesh = this.currentHand.dealerCardMeshes[1];
+        if (hiddenMesh) this.scene.remove(hiddenMesh);
+        const targetPos = new THREE.Vector3(2.0 + 1 * 9.5, 0.35 + 1 * 0.08, -32.0 + 1 * 1.5);
+        const revealedMesh = this.dealCardWithSlide(dealerCards[1], false, targetPos, -0.04 * 1, 0);
+        this.currentHand.dealerCardMeshes[1] = revealedMesh;
+        this.currentHand.dealerCards[1] = dealerCards[1];
+      }
+
+      // 3. Check for extra dealer cards drawn
+      for (let idx = this.currentHand.dealerCards.length; idx < dealerCards.length; idx++) {
+        const val = dealerCards[idx];
+        const targetPos = new THREE.Vector3(2.0 + idx * 9.5, 0.35 + idx * 0.08, -32.0 + idx * 1.5);
+        const delay = (idx - this.currentHand.dealerCards.length) * 220;
+        const mesh = this.dealCardWithSlide(val, false, targetPos, -0.04 * idx, delay);
+        this.currentHand.dealerCardMeshes.push(mesh);
+        this.currentHand.dealerCards.push(val);
+      }
+    }
+  }
+
+  /**
+   * Real-time 3D score badges on the felt surface for Fly and Dealer
+   */
+  update3DScores(playerTotal, dealerTotal, is21 = false, isDone = false) {
+    if (!this.playerScoreMesh) {
+      const geo = new THREE.PlaneGeometry(16, 5);
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 80;
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+      this.playerScoreMesh = new THREE.Mesh(geo, mat);
+      this.playerScoreMesh.rotation.x = -Math.PI / 2;
+      this.playerScoreMesh.position.set(10.0, 0.45, 6.0);
+      this.scene.add(this.playerScoreMesh);
+      this.playerScoreMesh.canvas = canvas;
+      this.playerScoreMesh.tex = tex;
+    }
+
+    if (!this.dealerScoreMesh) {
+      const geo = new THREE.PlaneGeometry(16, 5);
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 80;
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+      this.dealerScoreMesh = new THREE.Mesh(geo, mat);
+      this.dealerScoreMesh.rotation.x = -Math.PI / 2;
+      this.dealerScoreMesh.position.set(10.0, 0.45, -20.0);
+      this.scene.add(this.dealerScoreMesh);
+      this.dealerScoreMesh.canvas = canvas;
+      this.dealerScoreMesh.tex = tex;
+    }
+
+    // Render Player Score Badge
+    const pCtx = this.playerScoreMesh.canvas.getContext("2d");
+    pCtx.clearRect(0, 0, 256, 80);
+    pCtx.fillStyle = "rgba(15, 23, 42, 0.88)";
+    if (pCtx.roundRect) pCtx.roundRect(4, 4, 248, 72, 12);
+    else pCtx.rect(4, 4, 248, 72);
+    pCtx.fill();
+
+    if (is21) {
+      pCtx.strokeStyle = "#fbbf24";
+      pCtx.lineWidth = 6;
+      pCtx.stroke();
+      pCtx.fillStyle = "#fbbf24";
+      pCtx.font = "bold 24px Arial";
+      pCtx.textAlign = "center";
+      pCtx.fillText("★ 21 BLACKJACK ★", 128, 48);
+    } else if (playerTotal > 21) {
+      pCtx.strokeStyle = "#ef4444";
+      pCtx.lineWidth = 5;
+      pCtx.stroke();
+      pCtx.fillStyle = "#ef4444";
+      pCtx.font = "bold 26px Arial";
+      pCtx.textAlign = "center";
+      pCtx.fillText(`FLY: ${playerTotal} (BUST)`, 128, 48);
+    } else {
+      pCtx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+      pCtx.lineWidth = 4;
+      pCtx.stroke();
+      pCtx.fillStyle = "#38bdf8";
+      pCtx.font = "bold 28px Arial";
+      pCtx.textAlign = "center";
+      pCtx.fillText(`FLY: ${playerTotal}`, 128, 48);
+    }
+    this.playerScoreMesh.tex.needsUpdate = true;
+
+    // Render Dealer Score Badge
+    const dCtx = this.dealerScoreMesh.canvas.getContext("2d");
+    dCtx.clearRect(0, 0, 256, 80);
+    dCtx.fillStyle = "rgba(15, 23, 42, 0.88)";
+    if (dCtx.roundRect) dCtx.roundRect(4, 4, 248, 72, 12);
+    else dCtx.rect(4, 4, 248, 72);
+    dCtx.fill();
+
+    const dText = isDone && dealerTotal ? `DEALER: ${dealerTotal}` : "DEALER: ?";
+    const isDealerBust = isDone && dealerTotal && dealerTotal > 21;
+
+    if (isDealerBust) {
+      dCtx.strokeStyle = "#ef4444";
+      dCtx.lineWidth = 5;
+      dCtx.stroke();
+      dCtx.fillStyle = "#ef4444";
+      dCtx.font = "bold 26px Arial";
+      dCtx.textAlign = "center";
+      dCtx.fillText(`DEALER: ${dealerTotal} (BUST)`, 128, 48);
+    } else {
+      dCtx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      dCtx.lineWidth = 4;
+      dCtx.stroke();
+      dCtx.fillStyle = "#e2e8f0";
+      dCtx.font = "bold 28px Arial";
+      dCtx.textAlign = "center";
+      dCtx.fillText(dText, 128, 48);
+    }
+    this.dealerScoreMesh.tex.needsUpdate = true;
+  }
+
+  create3DCardMesh(val, isHidden) {
+    const cardGeo = new THREE.BoxGeometry(10.5, 0.2, 14.5);
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 356;
+    const ctx = canvas.getContext("2d");
 
     if (isHidden) {
-      // Pink/Red Lattice Pattern matching reference image!
+      // Pink/Red Lattice Pattern matching Photo 2 reference
       ctx.fillStyle = "#e11d48";
       ctx.fillRect(0, 0, 256, 356);
       ctx.strokeStyle = "#ffffff";
@@ -508,18 +683,15 @@ class FlyJackTable3D {
       ctx.font = "48px Arial";
       ctx.fillText(suit, 22, 110);
 
-      // Large central suit
       ctx.font = "96px Arial";
       ctx.textAlign = "center";
       ctx.fillText(suit, 128, 210);
     }
 
-    const frontTex = new THREE.CanvasTexture(frontCanvas);
+    const frontTex = new THREE.CanvasTexture(canvas);
     const edgeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
     const frontMat = new THREE.MeshStandardMaterial({ map: frontTex, roughness: 0.35 });
 
-    // Box faces: [right, left, top, bottom, front, back]
-    // Top face is index 2 (Y+)
     const materials = [edgeMat, edgeMat, frontMat, edgeMat, edgeMat, edgeMat];
     const mesh = new THREE.Mesh(cardGeo, materials);
     mesh.castShadow = true;
@@ -528,58 +700,82 @@ class FlyJackTable3D {
   }
 
   /**
-   * Triggers the Fly's Physical "HIT" Action (Foreleg Table Tap)
+   * Fly Physically Taps Table (HIT)
    */
   triggerForelegTap(onComplete) {
     this.isTapping = true;
-    this.tapProgress = 0.0;
+    this.tapPhase = 0.0;
     this.onTapComplete = onComplete;
   }
 
   /**
-   * Triggers the Fly's Physical "STAND" Action (Bilateral Wave)
+   * Fly Physically Waves Forelegs (STAND)
    */
   triggerForelegWave(onComplete) {
     this.isWaving = true;
-    this.waveProgress = 0.0;
+    this.wavePhase = 0.0;
     this.onWaveComplete = onComplete;
   }
 
   animate() {
     requestAnimationFrame(this.animate);
-    const elapsed = this.animationClock.getElapsedTime();
+    const dt = this.clock.getDelta();
+    const elapsed = this.clock.getElapsedTime();
 
-    // 1. Subtle idle biological motions
-    if (this.wingsMesh) {
-      this.wingsMesh.rotation.z = Math.sin(elapsed * 4.0) * 0.015;
+    // 1. Idle biological breathing & wing flutter
+    if (this.wingsGroup) {
+      this.wingsGroup.rotation.z = Math.sin(elapsed * 3.5) * 0.015;
     }
     if (this.abdomenMesh) {
-      this.abdomenMesh.rotation.x = -0.15 + Math.sin(elapsed * 2.5) * 0.02;
+      this.abdomenMesh.rotation.x = -0.15 + Math.sin(elapsed * 2.2) * 0.02;
     }
 
-    // 2. Foreleg Tap Animation (Casino HIT)
+    // 2. Smooth 3D Card Dealing Arc Flight
+    for (let i = this.activeCardAnimations.length - 1; i >= 0; i--) {
+      const anim = this.activeCardAnimations[i];
+      anim.progress += dt / anim.duration;
+      const t = Math.min(1.0, anim.progress);
+      // Smooth ease-out curve
+      const ease = 1 - Math.pow(1 - t, 3);
+
+      // Parabolic flight trajectory (arc peaking in the air)
+      const arcY = Math.sin(t * Math.PI) * 7.0;
+      anim.mesh.position.lerpVectors(anim.startPos, anim.targetPos, ease);
+      anim.mesh.position.y += arcY;
+
+      // Rotate to flat table orientation
+      anim.mesh.rotation.x = THREE.MathUtils.lerp(anim.startRot.x, 0, ease);
+      anim.mesh.rotation.y = THREE.MathUtils.lerp(anim.startRot.y, anim.targetRotY, ease);
+
+      if (t >= 1.0) {
+        anim.mesh.position.copy(anim.targetPos);
+        anim.mesh.rotation.set(0, anim.targetRotY, 0);
+        this.activeCardAnimations.splice(i, 1);
+      }
+    }
+
+    // 3. Foreleg Tap Animation (Casino HIT)
     if (this.isTapping && this.forelegPivotR) {
-      this.tapProgress += 0.045;
-      // Double tap wave: 2 sinusoids
-      const angle = Math.sin(this.tapProgress * Math.PI * 2.0);
-      if (this.tapProgress < 1.0) {
-        this.forelegPivotR.rotation.x = Math.max(0, -angle * 0.55);
-        this.forelegPivotR.position.y = -0.5 + Math.max(0, angle * 2.2);
+      this.tapPhase += 0.055;
+      const angle = Math.sin(this.tapPhase * Math.PI * 2.0);
+      if (this.tapPhase < 1.0) {
+        this.forelegPivotR.rotation.x = Math.max(0, -angle * 0.6);
+        this.forelegPivotR.position.y = -0.2 + Math.max(0, angle * 2.5);
       } else {
         this.isTapping = false;
         this.forelegPivotR.rotation.x = 0;
-        this.forelegPivotR.position.y = -0.5;
+        this.forelegPivotR.position.y = -0.2;
         if (this.onTapComplete) this.onTapComplete();
       }
     }
 
-    // 3. Foreleg Wave Animation (Casino STAND)
+    // 4. Foreleg Wave Animation (Casino STAND)
     if (this.isWaving && this.forelegPivotR && this.forelegPivotL) {
-      this.waveProgress += 0.035;
-      const waveAngle = Math.sin(this.waveProgress * Math.PI * 3.0);
-      if (this.waveProgress < 1.0) {
-        this.forelegPivotR.rotation.z = -waveAngle * 0.45;
-        this.forelegPivotL.rotation.z = waveAngle * 0.45;
+      this.wavePhase += 0.04;
+      const wave = Math.sin(this.wavePhase * Math.PI * 3.0);
+      if (this.wavePhase < 1.0) {
+        this.forelegPivotR.rotation.z = -wave * 0.5;
+        this.forelegPivotL.rotation.z = wave * 0.5;
       } else {
         this.isWaving = false;
         this.forelegPivotR.rotation.z = 0;
