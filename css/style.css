@@ -1,0 +1,593 @@
+:root {
+  --bg-black: #0b0f17;
+  --header-bg: #12151c;
+  --hud-bg: rgba(13, 17, 23, 0.92);
+  --hud-border: rgba(255, 255, 255, 0.12);
+  --accent-orange: #ea580c;
+  --accent-blue: #3b82f6;
+  --accent-green: #10b981;
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+}
+
+body.flyjack-body {
+  background-color: var(--bg-black);
+  color: var(--text-main);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Top Navigation Bar */
+.flyjack-topbar {
+  height: 48px;
+  background-color: var(--header-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 20;
+}
+
+.bar-left, .bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-pill {
+  background: var(--accent-orange);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.btn-top {
+  background: #1e2530;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-top:hover {
+  background: #2d3748;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-deal {
+  background: #2563eb;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.btn-deal:hover {
+  background: #1d4ed8;
+}
+
+/* Custom Checkbox */
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.checkbox-container input {
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+/* Speed Dropdown */
+.select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.select-wrapper select {
+  background: #1e2530;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.fps-text {
+  font-size: 12px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.btn-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #1e2530;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover {
+  color: white;
+  border-color: white;
+}
+
+/* Explore Dropdown */
+.dropdown-wrapper {
+  position: relative;
+}
+
+.explore-dropdown {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  background: #18202c;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  min-width: 200px;
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #e2e8f0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background: #2563eb;
+  color: white;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Bankroll Pill */
+.bankroll-pill {
+  background: #090c10;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+.topbar-subtitle {
+  background-color: var(--header-bg);
+  padding: 0 16px 6px 16px;
+  font-size: 11px;
+  color: #64748b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Viewport Area */
+.flyjack-viewport {
+  flex: 1;
+  position: relative;
+  background: #0c1b12;
+  overflow: hidden;
+}
+
+.scene-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Bottom-Left Floating HUD Panel */
+.flyjack-hud {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  width: 330px;
+  background: var(--hud-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--hud-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+  z-index: 30;
+  pointer-events: auto;
+}
+
+.hud-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.hud-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.hud-sub {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.hud-sensory-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+  font-family: monospace;
+}
+
+.hud-sensory-row strong {
+  color: #38bdf8;
+}
+
+/* Q-Meters */
+.hud-q-container {
+  margin-bottom: 12px;
+}
+
+.q-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.q-label {
+  width: 52px;
+  color: #cbd5e1;
+  font-family: monospace;
+}
+
+.q-track {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.q-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.fill-stick {
+  background: #3b82f6;
+}
+
+.fill-hit {
+  background: #60a5fa;
+}
+
+.q-val {
+  width: 48px;
+  text-align: right;
+  font-size: 11px;
+  font-family: monospace;
+  color: #94a3b8;
+}
+
+.q-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.legend-box {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+
+.box-fly { background: #3b82f6; }
+.box-opt { background: #60a5fa; }
+
+/* Decision Row */
+.hud-decision-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #f1f5f9;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.badge-match {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.badge-mismatch {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.hud-footer {
+  font-size: 10px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+/* Bottom Right Caption */
+.flyjack-caption {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  max-width: 440px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: right;
+  pointer-events: none;
+}
+
+/* Picture-in-Picture CNS Brain Window (Matching Photo 1: Paint the Brain) */
+.cns-pip-window {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  width: 390px;
+  height: 350px;
+  background: rgba(13, 17, 23, 0.96);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
+  z-index: 40;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.pip-header-photo1 {
+  height: 44px;
+  background: rgba(18, 24, 34, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  flex-shrink: 0;
+}
+
+.pip-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.2px;
+}
+
+.pip-sub {
+  font-size: 10.5px;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+
+.pip-right-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pip-dropdown-label {
+  font-size: 11px;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 3px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pip-dropdown-label:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.btn-close-pip {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.btn-close-pip:hover {
+  color: #ffffff;
+}
+
+/* Legend at bottom of CNS window matching Photo 1 */
+.cns-photo1-legend {
+  height: 28px;
+  background: rgba(13, 17, 23, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.legend-dots {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #94a3b8;
+}
+
+.legend-dots span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dot-color {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-resting {
+  background-color: #3b4861; /* Slate Blue */
+  box-shadow: 0 0 5px rgba(59, 72, 97, 0.8);
+}
+
+.dot-stimulated {
+  background-color: #8b5cf6; /* Vibrant Violet */
+  box-shadow: 0 0 7px rgba(139, 92, 246, 0.8);
+}
+
+.dot-firing {
+  background-color: #fbbf24; /* Golden Amber */
+  box-shadow: 0 0 9px rgba(251, 191, 36, 0.9);
+}
+
+.legend-axis {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 17px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+/* Tooltip hovering over brain neurons matching Photo 1 */
+.brain-tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 6px;
+  padding: 6px 10px;
+  pointer-events: none;
+  z-index: 60;
+  font-size: 11px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+}
+
+/* 21 / Blackjack Badges */
+.badge-blackjack-21 {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.badge-21 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-card {
+  background: #18202c;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 480px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.modal-card h3 {
+  margin-bottom: 12px;
+  color: #38bdf8;
+}
+
+.modal-card ul {
+  margin: 12px 0 16px 20px;
+}
