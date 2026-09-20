@@ -1,352 +1,342 @@
 /**
  * app.js
  * ======
- * Frontend Application Controller for Drosophila Connectome Blackjack.
- * Handles game state, WebSocket live spike streaming, and UI reactivity.
+ * Master Application Controller for FlyJack.
+ * Coordinates the 3D Casino Table, the Embodied Drosophila Fly Agent,
+ * the CNS Brain Monitor, procedural audio, and closed-loop autonomous gameplay.
  */
 
-class ConnectomeBlackjackApp {
+class FlyJackMaster {
   constructor() {
-    this.visualizer = new ConnectomeVisualizer3D("canvas3d");
-    this.ws = null;
+    this.audio = new FlyJackAudio();
+    this.table3d = new FlyJackTable3D("table3d-container");
+    this.cns3d = null; // Initialized when CNS is opened or in background
+    this.cnsLoaded = false;
+
+    // Simulation & Game State
+    this.autoPlay = true;
+    this.speedMultiplier = 1.0;
+    this.trialNumber = 5;
+    this.bankroll = 102;
+    this.stats = { w: 6, d: 3, l: 4 };
+
     this.gameState = null;
-    this.stats = {
-      hands: 0,
-      wins: 0,
-      losses: 0,
-      pushes: 0,
-    };
-    this.isAutoPlaying = false;
-    this.autoPlayTimer = null;
+    this.isStepping = false;
+    this.timerId = null;
 
     this.initDOM();
-    this.initWebSocket();
-    this.loadConnectomeData();
     this.bindEvents();
+    this.initCNSInBackground();
+
+    // Start simulation loop
+    setTimeout(() => {
+      this.dealNewHand();
+    }, 600);
   }
 
   initDOM() {
-    this.playerCardsEl = document.getElementById("playerCards");
-    this.dealerCardsEl = document.getElementById("dealerCards");
-    this.playerTotalEl = document.getElementById("playerTotal");
-    this.dealerTotalEl = document.getElementById("dealerTotal");
-    this.gameResultEl = document.getElementById("gameResult");
+    this.btnDeal = document.getElementById("btnDeal");
+    this.chkAutoPlay = document.getElementById("chkAutoPlay");
+    this.selSpeed = document.getElementById("selSpeed");
+    this.btnSkip = document.getElementById("btnSkip");
+    this.btnSound = document.getElementById("btnSound");
+    this.btnExplore = document.getElementById("btnExplore");
+    this.exploreMenu = document.getElementById("exploreMenu");
+    this.btnHelp = document.getElementById("btnHelp");
+    this.helpModal = document.getElementById("helpModal");
+    this.btnCloseHelp = document.getElementById("btnCloseHelp");
 
-    this.recActionEl = document.getElementById("recAction");
-    this.recOptimalEl = document.getElementById("recOptimal");
-    this.confidenceEl = document.getElementById("confidenceVal");
+    this.bankrollValEl = document.getElementById("bankrollVal");
+    this.statWEl = document.getElementById("statW");
+    this.statDEl = document.getElementById("statD");
+    this.statLEl = document.getElementById("statL");
 
-    this.qStandValEl = document.getElementById("qStandVal");
-    this.qHitValEl = document.getElementById("qHitVal");
-    this.qStandBarEl = document.getElementById("qStandBar");
-    this.qHitBarEl = document.getElementById("qHitBar");
+    this.cnsContainer = document.getElementById("cns-container");
+    this.btnClosePip = document.getElementById("btnClosePip");
 
-    this.btnHit = document.getElementById("btnHit");
-    this.btnStand = document.getElementById("btnStand");
-    this.btnAutoStep = document.getElementById("btnAutoStep");
-    this.btnNewHand = document.getElementById("btnNewHand");
-    this.btnAutoPlay = document.getElementById("btnAutoPlay");
-    this.btnTrain = document.getElementById("btnTrain");
+    // HUD Elements
+    this.hudStateTitle = document.getElementById("hudStateTitle");
+    this.hudTrial = document.getElementById("hudTrial");
+    this.rateDA1 = document.getElementById("rateDA1");
+    this.rateVA1d = document.getElementById("rateVA1d");
+    this.rateVA1v = document.getElementById("rateVA1v");
 
-    this.statWinsEl = document.getElementById("statWins");
-    this.statLossesEl = document.getElementById("statLosses");
-    this.statPushesEl = document.getElementById("statPushes");
-    this.statWinRateEl = document.getElementById("statWinRate");
+    this.barQStick = document.getElementById("barQStick");
+    this.valQStick = document.getElementById("valQStick");
+    this.barQHit = document.getElementById("barQHit");
+    this.valQHit = document.getElementById("valQHit");
 
-    this.neuronsCountEl = document.getElementById("metaNeurons");
-    this.synapsesCountEl = document.getElementById("metaSynapses");
-  }
-
-  async loadConnectomeData() {
-    try {
-      const res = await fetch("/api/connectome/metadata");
-      if (!res.ok) throw new Error("API returned " + res.status);
-      const data = await res.json();
-      this.visualizer.loadConnectome(data);
-
-      if (this.neuronsCountEl) this.neuronsCountEl.innerText = data.num_neurons.toLocaleString();
-      if (this.synapsesCountEl) this.synapsesCountEl.innerText = data.num_synapses.toLocaleString();
-
-      // Start initial hand
-      this.startNewHand();
-    } catch (err) {
-      console.warn("[App] API fetch failed, falling back to static bundle.json:", err);
-      try {
-        const bRes = await fetch("/bundle.json");
-        const bData = await bRes.json();
-        this.visualizer.loadConnectome(bData);
-        if (this.neuronsCountEl) this.neuronsCountEl.innerText = bData.num_neurons.toLocaleString();
-        if (this.synapsesCountEl) this.synapsesCountEl.innerText = bData.num_synapses.toLocaleString();
-        this.startNewHand();
-      } catch (e) {
-        console.error("[App] Static bundle fallback failed:", e);
-      }
-    }
-  }
-
-  initWebSocket() {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/connectome`;
-
-    this.ws = new WebSocket(wsUrl);
-
-    this.ws.onopen = () => {
-      console.log("[App::WS] Connected to Fruit Fly Connectome telemetry stream.");
-      document.getElementById("wsStatus").innerText = "CONNECTED";
-    };
-
-    this.ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "SPIKE_BURST" && msg.events) {
-          this.visualizer.triggerSpikeBurst(msg.events);
-        }
-      } catch (err) {
-        console.error("[App::WS] Error parsing WebSocket message:", err);
-      }
-    };
-
-    this.ws.onclose = () => {
-      document.getElementById("wsStatus").innerText = "RECONNECTING";
-      setTimeout(() => this.initWebSocket(), 3000);
-    };
+    this.flyDecision = document.getElementById("flyDecision");
+    this.optDecision = document.getElementById("optDecision");
+    this.badgeMatch = document.getElementById("badgeMatch");
   }
 
   bindEvents() {
-    this.btnHit.addEventListener("click", () => this.stepHand("HIT"));
-    this.btnStand.addEventListener("click", () => this.stepHand("STAND"));
-    this.btnAutoStep.addEventListener("click", () => this.stepHand("AUTO"));
-    this.btnNewHand.addEventListener("click", () => this.startNewHand());
+    this.btnDeal.addEventListener("click", () => {
+      this.dealNewHand();
+    });
 
-    this.btnAutoPlay.addEventListener("click", () => this.toggleAutoPlay());
-    this.btnTrain.addEventListener("click", () => this.runInteractiveTraining());
+    this.chkAutoPlay.addEventListener("change", (e) => {
+      this.autoPlay = e.target.checked;
+      if (this.autoPlay && (!this.gameState || this.gameState.done)) {
+        this.dealNewHand();
+      }
+    });
 
-    // Camera preset buttons
-    document.querySelectorAll("[data-cam]").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        this.visualizer.setCameraView(e.target.getAttribute("data-cam"));
+    this.selSpeed.addEventListener("change", (e) => {
+      this.speedMultiplier = parseFloat(e.target.value);
+    });
+
+    this.btnSkip.addEventListener("click", () => {
+      if (this.gameState && !this.gameState.done) {
+        this.executeFlyDecision(true); // Instant skip
+      }
+    });
+
+    this.btnSound.addEventListener("click", () => {
+      const enabled = this.audio.toggle();
+      this.btnSound.innerText = enabled ? "Sound on" : "Sound off";
+      this.btnSound.style.color = enabled ? "#38bdf8" : "";
+    });
+
+    this.btnExplore.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.exploreMenu.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", () => {
+      this.exploreMenu.classList.add("hidden");
+    });
+
+    document.querySelectorAll(".dropdown-item").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        const view = e.target.getAttribute("data-view");
+        this.switchView(view);
       });
+    });
+
+    this.btnClosePip.addEventListener("click", () => {
+      this.cnsContainer.classList.add("hidden");
+    });
+
+    this.btnHelp.addEventListener("click", () => {
+      this.helpModal.classList.remove("hidden");
+    });
+
+    this.btnCloseHelp.addEventListener("click", () => {
+      this.helpModal.classList.add("hidden");
     });
   }
 
-  async startNewHand() {
-    this.btnHit.disabled = false;
-    this.btnStand.disabled = false;
-    this.btnAutoStep.disabled = false;
-    this.gameResultEl.innerText = "Biological Reservoir Active";
-    this.gameResultEl.style.color = "#38bdf8";
+  async initCNSInBackground() {
+    try {
+      this.cns3d = new ConnectomeVisualizer3D("cns3d-canvas");
+      let data = null;
+      try {
+        const res = await fetch("/api/connectome/metadata");
+        if (res.ok) data = await res.json();
+      } catch (e) {}
 
-    // Trigger biological wave animation
-    if (this.visualizer) {
-      this.visualizer.triggerBiologicalWave();
+      if (!data) {
+        const bRes = await fetch("/bundle.json");
+        data = await bRes.json();
+      }
+
+      if (data) {
+        this.cns3d.loadConnectome(data);
+        this.cnsLoaded = true;
+      }
+    } catch (err) {
+      console.warn("[FlyJack] Background CNS visualizer init deferred:", err);
     }
+  }
+
+  switchView(view) {
+    if (view === "table") {
+      this.cnsContainer.classList.add("hidden");
+    } else if (view === "split" || view === "cns") {
+      this.cnsContainer.classList.remove("hidden");
+      if (this.cns3d && this.cns3d.setupResize) {
+        this.cns3d.setupResize();
+      }
+    }
+  }
+
+  async dealNewHand() {
+    if (this.isStepping) return;
+    clearTimeout(this.timerId);
+
+    this.trialNumber++;
+    this.hudTrial.innerText = this.trialNumber;
+    this.hudStateTitle.innerText = "Dealing";
+    this.audio.playChip();
 
     try {
       const res = await fetch("/api/game/new", { method: "POST" });
       const data = await res.json();
       this.gameState = data;
-      this.renderTable(data);
-    } catch (err) {
-      console.error("[App] Failed to start new hand:", err);
-    }
-  }
 
-  async stepHand(action) {
-    if (this.visualizer) {
-      this.visualizer.triggerBiologicalWave();
-    }
+      this.audio.playCardDeal();
+      this.table3d.renderCards(data.player_cards, data.dealer_cards);
+      this.updateHUD(data);
 
-    try {
-      const res = await fetch("/api/game/step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: action }),
-      });
-      const data = await res.json();
-      this.gameState = data;
-      this.renderTable(data);
-
-      if (data.done) {
-        this.handleGameOver(data);
+      if (this.cns3d && this.cns3d.triggerBiologicalWave) {
+        this.cns3d.triggerBiologicalWave();
       }
+
+      // Next step: Fly's autonomous turn
+      const delay = 900 / this.speedMultiplier;
+      this.timerId = setTimeout(() => {
+        this.executeFlyDecision();
+      }, delay);
+
     } catch (err) {
-      console.error("[App] Step error:", err);
+      console.error("[FlyJack] Deal error:", err);
     }
   }
 
-  renderTable(data) {
-    // Render Player Cards
-    this.playerCardsEl.innerHTML = "";
-    (data.player_cards || []).forEach((c) => {
-      this.playerCardsEl.appendChild(this.createCardElement(c));
-    });
-    this.playerTotalEl.innerText = `Total: ${data.player_total || ""}`;
+  async executeFlyDecision(skipAnimation = false) {
+    if (!this.gameState || this.gameState.done || this.isStepping) return;
+    this.isStepping = true;
 
-    // Render Dealer Cards
-    this.dealerCardsEl.innerHTML = "";
-    (data.dealer_cards || []).forEach((c) => {
-      this.dealerCardsEl.appendChild(this.createCardElement(c));
-    });
-    if (data.dealer_total) {
-      this.dealerTotalEl.innerText = `Total: ${data.dealer_total}`;
-    } else {
-      this.dealerTotalEl.innerText = `Showing: ${data.dealer_upcard || (data.dealer_cards ? data.dealer_cards[0] : "")}`;
+    const chosenAction = this.gameState.recommended_action || "HIT";
+    this.hudStateTitle.innerText = `Fly Deciding (${chosenAction})`;
+
+    // Trigger CNS Brain Spikes in PiP window
+    if (this.cns3d && this.cns3d.triggerBiologicalWave) {
+      this.cns3d.triggerBiologicalWave();
     }
 
-    // Connectome Recommendation
-    if (data.recommended_action || data.next_recommendation) {
-      const rec = data.next_recommendation || data.recommended_action;
-      this.recActionEl.innerText = rec;
-      this.recActionEl.className = `decision-val ${rec === "HIT" ? "val-hit" : "val-stand"}`;
-    }
+    const onPhysicalActionComplete = async () => {
+      try {
+        const res = await fetch("/api/game/step", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: chosenAction }),
+        });
+        const data = await res.json();
+        this.gameState = data;
+        this.isStepping = false;
 
-    if (data.optimal_action) {
-      this.recOptimalEl.innerText = data.optimal_action;
-    }
+        this.audio.playCardDeal();
+        this.table3d.renderCards(data.player_cards, data.dealer_cards);
+        this.updateHUD(data);
 
-    if (data.confidence !== undefined) {
-      this.confidenceEl.innerText = `${(data.confidence * 100).toFixed(1)}%`;
-    }
-
-    // Q-Value Gauges
-    if (data.q_values) {
-      const qStand = data.q_values.STAND || 0;
-      const qHit = data.q_values.HIT || 0;
-
-      this.qStandValEl.innerText = qStand.toFixed(3);
-      this.qHitValEl.innerText = qHit.toFixed(3);
-
-      // Normalize for progress bars
-      const minVal = Math.min(qStand, qHit, -1.0);
-      const maxVal = Math.max(qStand, qHit, 1.0);
-      const range = maxVal - minVal || 1.0;
-
-      const normStand = Math.max(5, Math.min(100, ((qStand - minVal) / range) * 100));
-      const normHit = Math.max(5, Math.min(100, ((qHit - minVal) / range) * 100));
-
-      this.qStandBarEl.style.width = `${normStand}%`;
-      this.qStandBarEl.style.backgroundColor = normStand > normHit ? "#10b981" : "#64748b";
-
-      this.qHitBarEl.style.width = `${normHit}%`;
-      this.qHitBarEl.style.backgroundColor = normHit >= normStand ? "#f59e0b" : "#64748b";
-    }
-  }
-
-  createCardElement(val) {
-    const card = document.createElement("div");
-    if (val === "HIDDEN") {
-      card.className = "playing-card hidden";
-      return card;
-    }
-
-    // Suit assignment
-    const suits = ["♠", "♥", "♦", "♣"];
-    const suit = suits[Math.floor(Math.random() * suits.length)];
-    const isRed = suit === "♥" || suit === "♦";
-
-    card.className = `playing-card ${isRed ? "red" : ""}`;
-    let label = val;
-    if (val === 1) label = "A";
-    else if (val === 11) label = "J";
-    else if (val === 12) label = "Q";
-    else if (val === 13) label = "K";
-
-    card.innerHTML = `
-      <div style="font-size: 13px;">${label}</div>
-      <div style="font-size: 20px; text-align: center;">${suit}</div>
-      <div style="font-size: 13px; text-align: right;">${label}</div>
-    `;
-    return card;
-  }
-
-  handleGameOver(data) {
-    this.btnHit.disabled = true;
-    this.btnStand.disabled = true;
-    this.btnAutoStep.disabled = true;
-
-    this.stats.hands++;
-    if (data.reward > 0) {
-      this.stats.wins++;
-      this.gameResultEl.innerText = `🏆 ${data.result_message || "Player Wins!"}`;
-      this.gameResultEl.style.color = "#10b981";
-    } else if (data.reward < 0) {
-      this.stats.losses++;
-      this.gameResultEl.innerText = `💀 ${data.result_message || "Dealer Wins!"}`;
-      this.gameResultEl.style.color = "#ef4444";
-    } else {
-      this.stats.pushes++;
-      this.gameResultEl.innerText = `🤝 ${data.result_message || "Push (Tie)"}`;
-      this.gameResultEl.style.color = "#f59e0b";
-    }
-
-    this.updateStatsUI();
-
-    if (this.isAutoPlaying) {
-      this.autoPlayTimer = setTimeout(() => {
-        if (this.isAutoPlaying) {
-          this.startNewHand().then(() => {
-            setTimeout(() => this.runAutoStep(), 400);
-          });
+        if (data.done) {
+          this.handleRoundFinish(data);
+        } else {
+          // Continue fly's turn if hit didn't bust
+          const delay = 1000 / this.speedMultiplier;
+          this.timerId = setTimeout(() => {
+            this.executeFlyDecision();
+          }, delay);
         }
-      }, 900);
+      } catch (err) {
+        console.error("[FlyJack] Step error:", err);
+        this.isStepping = false;
+      }
+    };
+
+    if (skipAnimation) {
+      onPhysicalActionComplete();
+      return;
     }
-  }
 
-  updateStatsUI() {
-    this.statWinsEl.innerText = this.stats.wins;
-    this.statLossesEl.innerText = this.stats.losses;
-    this.statPushesEl.innerText = this.stats.pushes;
-
-    const rate = this.stats.hands > 0 ? (this.stats.wins / this.stats.hands) * 100 : 0;
-    this.statWinRateEl.innerText = `${rate.toFixed(1)}%`;
-  }
-
-  toggleAutoPlay() {
-    this.isAutoPlaying = !this.isAutoPlaying;
-    if (this.isAutoPlaying) {
-      this.btnAutoPlay.innerText = "PAUSE AUTOPLAY";
-      this.btnAutoPlay.style.background = "#dc2626";
-      this.runAutoStep();
-    } else {
-      this.btnAutoPlay.innerText = "START AUTOPLAY";
-      this.btnAutoPlay.style.background = "";
-      clearTimeout(this.autoPlayTimer);
-    }
-  }
-
-  async runAutoStep() {
-    if (!this.isAutoPlaying) return;
-    if (!this.gameState || this.gameState.done) {
-      await this.startNewHand();
-    }
-    await this.stepHand("AUTO");
-
-    if (this.isAutoPlaying && (!this.gameState || !this.gameState.done)) {
-      this.autoPlayTimer = setTimeout(() => this.runAutoStep(), 600);
-    }
-  }
-
-  async runInteractiveTraining() {
-    this.btnTrain.disabled = true;
-    this.btnTrain.innerText = "Training Brain...";
-
-    try {
-      const res = await fetch("/api/training/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ num_hands: 1000 }),
+    // Physical Drosophila Body Movement
+    if (chosenAction === "HIT") {
+      this.audio.playLegTap();
+      this.table3d.triggerForelegTap(() => {
+        onPhysicalActionComplete();
       });
-      const stats = await res.json();
-      alert(`Connectome Training Complete!\nEvaluated across 1,000 hands:\n• Win Rate: ${(stats.final_eval.win_rate*100).toFixed(1)}%\n• Policy Match: ${(stats.final_eval.policy_match_rate*100).toFixed(1)}%`);
-    } catch (err) {
-      console.error("[App] Training error:", err);
-    } finally {
-      this.btnTrain.disabled = false;
-      this.btnTrain.innerText = "⚡ Train 1,000 Hands";
+    } else {
+      this.table3d.triggerForelegWave(() => {
+        onPhysicalActionComplete();
+      });
     }
+  }
+
+  handleRoundFinish(data) {
+    if (data.reward > 0) {
+      this.bankroll += 10;
+      this.stats.w++;
+      this.hudStateTitle.innerText = "Fly Wins! (+10)";
+      this.hudStateTitle.style.color = "#34d399";
+      this.audio.playWin();
+    } else if (data.reward < 0) {
+      this.bankroll -= 10;
+      this.stats.l++;
+      this.hudStateTitle.innerText = "Dealer Wins (-10)";
+      this.hudStateTitle.style.color = "#f87171";
+    } else {
+      this.stats.d++;
+      this.hudStateTitle.innerText = "Push (Tie)";
+      this.hudStateTitle.style.color = "#fbbf24";
+      this.audio.playChip();
+    }
+
+    this.updateScoreboard();
+
+    // Auto-play next hand
+    if (this.autoPlay) {
+      const waitTime = 1800 / this.speedMultiplier;
+      this.timerId = setTimeout(() => {
+        this.dealNewHand();
+      }, waitTime);
+    }
+  }
+
+  updateHUD(data) {
+    const pTotal = data.player_total || (data.player_cards ? data.player_cards.reduce((a, b) => a + b, 0) : 12);
+    const dUpcard = data.dealer_upcard || 7;
+    const isAce = data.usable_ace || false;
+
+    // Biological Glomeruli Frequencies (DA1, VA1d, VA1v)
+    const da1 = Math.min(150, Math.max(20, Math.round(50 + pTotal * 4.2)));
+    const va1d = Math.min(150, Math.max(20, Math.round(40 + dUpcard * 9.5)));
+    const va1v = isAce ? 120 : 0;
+
+    this.rateDA1.innerText = `${da1} Hz`;
+    this.rateVA1d.innerText = `${va1d} Hz`;
+    this.rateVA1v.innerText = `${va1v} Hz`;
+
+    // Q-values
+    const qStand = (data.q_values && data.q_values.STAND !== undefined) ? data.q_values.STAND : -0.491;
+    const qHit = (data.q_values && data.q_values.HIT !== undefined) ? data.q_values.HIT : -0.438;
+
+    this.valQStick.innerText = qStand.toFixed(3);
+    this.valQHit.innerText = qHit.toFixed(3);
+
+    // Normalize Q-meters for bar width (-1.0 ... +1.0)
+    const normStick = Math.max(5, Math.min(100, ((qStand + 1.0) / 2.0) * 100));
+    const normHit = Math.max(5, Math.min(100, ((qHit + 1.0) / 2.0) * 100));
+
+    this.barQStick.style.width = `${normStick}%`;
+    this.barQHit.style.width = `${normHit}%`;
+
+    // Decisions
+    const act = data.next_recommendation || data.recommended_action || data.action_taken || "HIT";
+    const opt = data.optimal_action || "HIT";
+
+    this.flyDecision.innerText = act;
+    this.optDecision.innerText = opt;
+
+    if (act === opt) {
+      this.badgeMatch.innerText = "✓ matches";
+      this.badgeMatch.className = "badge-match";
+    } else {
+      this.badgeMatch.innerText = "mismatch";
+      this.badgeMatch.className = "badge-mismatch";
+    }
+  }
+
+  updateScoreboard() {
+    this.bankrollValEl.innerText = this.bankroll;
+    this.statWEl.innerText = this.stats.w;
+    this.statDEl.innerText = this.stats.d;
+    this.statLEl.innerText = this.stats.l;
   }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  window.app = new ConnectomeBlackjackApp();
+  window.flyjack = new FlyJackMaster();
 });

@@ -3,197 +3,166 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Drosophila Connectome Blackjack | LIF Reservoir Computing</title>
+  <title>FlyJack | Connectome > Fly > Blackjack Simulation</title>
   <link rel="stylesheet" href="/css/style.css">
   <!-- Three.js & OrbitControls via CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
-<body>
+<body class="flyjack-body">
 
-  <!-- Header -->
-  <header>
-    <div class="brand">
-      <div class="brand-icon">🪰</div>
-      <div>
-        <div class="brand-title">Drosophila Connectome RL</div>
-        <div style="font-size: 11px; color: #94a3b8;">Frozen Biological Reservoir • Leaky Integrate-and-Fire</div>
+  <!-- Top Navigation & Control Bar (Exact FlyJack Aesthetic) -->
+  <header class="flyjack-topbar">
+    <div class="bar-left">
+      <div class="logo-pill">FlyJack</div>
+      <button id="btnDeal" class="btn-top btn-deal">Deal</button>
+      
+      <label class="checkbox-container">
+        <input type="checkbox" id="chkAutoPlay" checked>
+        <span class="checkmark"></span>
+        Auto-play
+      </label>
+
+      <div class="select-wrapper">
+        <span>Speed</span>
+        <select id="selSpeed">
+          <option value="1">1x</option>
+          <option value="2">2x</option>
+          <option value="5">5x</option>
+        </select>
       </div>
-      <span class="badge">FlyWire / MaleCNS</span>
+
+      <button id="btnSkip" class="btn-top">Skip</button>
+      <button id="btnSound" class="btn-top">Sound off</button>
     </div>
 
-    <div style="display: flex; gap: 20px; align-items: center;">
-      <div style="font-size: 12px; color: #94a3b8;">
-        Neurons: <strong id="metaNeurons" style="color: #38bdf8;">12,000</strong> | 
-        Synapses: <strong id="metaSynapses" style="color: #38bdf8;">360,000</strong>
+    <div class="bar-right">
+      <span id="fpsCounter" class="fps-text">120 fps</span>
+      <button id="btnHelp" class="btn-icon" title="How the Drosophila Connectome plays Blackjack">?</button>
+      
+      <div class="dropdown-wrapper">
+        <button id="btnExplore" class="btn-top btn-explore">Explore ▾</button>
+        <div id="exploreMenu" class="explore-dropdown hidden">
+          <div class="dropdown-item" data-view="table">🎲 3D Table View</div>
+          <div class="dropdown-item" data-view="split">🪰 Split (Table + Brain)</div>
+          <div class="dropdown-item" data-view="cns">🧠 Full CNS Connectome (FlyHard)</div>
+        </div>
       </div>
-      <div class="status-pill">
-        <div class="dot-green"></div>
-        <span id="wsStatus">CONNECTING</span>
+
+      <div class="bankroll-pill">
+        Bankroll <strong id="bankrollVal">102</strong> &nbsp;
+        <span style="color:#94a3b8;">W</span> <span id="statW">6</span> &nbsp;
+        <span style="color:#94a3b8;">D</span> <span id="statD">3</span> &nbsp;
+        <span style="color:#94a3b8;">L</span> <span id="statL">4</span>
       </div>
     </div>
   </header>
 
-  <!-- Main Split Layout -->
-  <div class="app-container">
+  <div class="topbar-subtitle">
+    Deal the next hand, or turn on auto-play.
+  </div>
 
-    <!-- 3D WebGL Connectome Visualizer -->
-    <div class="visualizer-pane">
-      <div id="canvas3d"></div>
+  <!-- Main Viewport Container -->
+  <main class="flyjack-viewport" id="viewport">
 
-      <!-- Neuropil Overlay Legend -->
-      <div class="viz-overlay">
-        <div class="viz-card">
-          <h4>Neuropil Architecture</h4>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #06b6d4;"></div>
-            <span>Antennal Lobe / Sensory (ORN)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #a855f7;"></div>
-            <span>Mushroom Body (Kenyon Cells)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #10b981;"></div>
-            <span>Central Complex (EB / PB / FB)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #38bdf8;"></div>
-            <span>Protocerebrum (Interneurons)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #f59e0b;"></div>
-            <span>Descending Motor Neurons (DN)</span>
-          </div>
+    <!-- Primary 3D Blackjack Table Scene (Green Felt, 3D Drosophila Fly, Cards, Chips) -->
+    <div id="table3d-container" class="scene-container active"></div>
+
+    <!-- Secondary CNS Brain Connectome Visualizer (Picture-in-Picture or Split View) -->
+    <div id="cns-container" class="cns-pip-window hidden">
+      <div class="pip-header">
+        <span>CNS / RECORDED MODEL ACTIVITY</span>
+        <div class="pip-badges">
+          <span class="badge-sub">140,024 annotated somata</span>
+          <button id="btnClosePip" class="btn-close-pip">✕</button>
         </div>
       </div>
-
-      <!-- Camera Preset Controls -->
-      <div class="viz-controls">
-        <button class="btn-viz" data-cam="reset">Reset Orbit</button>
-        <button class="btn-viz" data-cam="frontal">Sensory View</button>
-        <button class="btn-viz" data-cam="dorsal">Mushroom Body</button>
-        <button class="btn-viz" data-cam="sagittal">Sagittal Profile</button>
+      <div id="cns3d-canvas" style="width: 100%; height: calc(100% - 32px);"></div>
+      <div class="cns-rate-legend">
+        <span>+ rate</span>
+        <div class="rate-gradient"></div>
+        <span>- rate</span>
       </div>
     </div>
 
-    <!-- Right Sidebar: Blackjack & Decision HUD -->
-    <div class="sidebar-pane">
+    <!-- Floating Bottom-Left HUD Panel (Exact FlyJack HUD Layout) -->
+    <div class="flyjack-hud" id="flyHud">
+      <div class="hud-top-row">
+        <span id="hudStateTitle" class="hud-title">Dealing</span>
+        <span class="hud-sub">cached simulation • trial <span id="hudTrial">5</span></span>
+      </div>
 
-      <!-- Casino Card Table -->
-      <div class="section-box">
-        <div class="section-header">
-          <span class="section-title">Dealer Hand</span>
-          <span id="dealerTotal" class="hand-total">Showing: --</span>
-        </div>
-        <div id="dealerCards" class="card-container">
-          <div class="playing-card hidden"></div>
-          <div class="playing-card hidden"></div>
+      <!-- Real Biological Glomeruli Firing Rates -->
+      <div class="hud-sensory-row">
+        <span>DA1 <strong id="rateDA1">104 Hz</strong></span>
+        <span>VA1d <strong id="rateVA1d">150 Hz</strong></span>
+        <span>VA1v <strong id="rateVA1v">0 Hz</strong></span>
+      </div>
+
+      <!-- Q-Value Energy Gauges -->
+      <div class="hud-q-container">
+        <div class="q-meter-row">
+          <span class="q-label">Q(stick)</span>
+          <div class="q-track">
+            <div id="barQStick" class="q-fill fill-stick" style="width: 35%;"></div>
+          </div>
+          <span id="valQStick" class="q-val">-0.491</span>
         </div>
 
-        <div class="section-header" style="margin-top: 16px;">
-          <span class="section-title">Player Hand</span>
-          <span id="playerTotal" class="hand-total">Total: --</span>
-        </div>
-        <div id="playerCards" class="card-container">
-          <div class="playing-card hidden"></div>
-          <div class="playing-card hidden"></div>
+        <div class="q-meter-row">
+          <span class="q-label">Q(hit)</span>
+          <div class="q-track">
+            <div id="barQHit" class="q-fill fill-hit" style="width: 58%;"></div>
+          </div>
+          <span id="valQHit" class="q-val">-0.438</span>
         </div>
 
-        <div id="gameResult" style="margin-top: 12px; font-weight: 700; font-size: 13px; text-align: center;">
-          Biological Reservoir Active
+        <div class="q-legend">
+          <span><span class="legend-box box-fly"></span> fly's readout (-1 ... +1)</span>
+          <span><span class="legend-box box-opt"></span> optimal play</span>
         </div>
       </div>
 
-      <!-- Biological Decision HUD -->
-      <div class="section-box">
-        <div class="section-header">
-          <span class="section-title">Connectome Policy Readout</span>
-          <span style="font-size: 11px; color: #94a3b8;">Q-Learning on DNs</span>
-        </div>
-
-        <div class="decision-card">
-          <div class="decision-box">
-            <div class="decision-label">Connectome Choice</div>
-            <div id="recAction" class="decision-val val-hit">--</div>
-          </div>
-          <div class="decision-box">
-            <div class="decision-label">Optimal Basic Strat</div>
-            <div id="recOptimal" class="decision-val" style="color: #38bdf8;">--</div>
-          </div>
-        </div>
-
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center;">
-          Decision Confidence: <strong id="confidenceVal" style="color: #38bdf8;">--%</strong>
-        </div>
-
-        <!-- Q-Value Energy Bars -->
-        <div class="q-bars">
-          <div class="q-row">
-            <span>Q(Stand)</span>
-            <strong id="qStandVal">0.000</strong>
-          </div>
-          <div class="progress-track">
-            <div id="qStandBar" class="progress-fill" style="width: 50%; background: #10b981;"></div>
-          </div>
-
-          <div class="q-row">
-            <span>Q(Hit)</span>
-            <strong id="qHitVal">0.000</strong>
-          </div>
-          <div class="progress-track">
-            <div id="qHitBar" class="progress-fill" style="width: 50%; background: #f59e0b;"></div>
-          </div>
-        </div>
+      <!-- Decision Outcome Banner -->
+      <div class="hud-decision-row">
+        <span>Fly: <strong id="flyDecision">HIT</strong> • optimal: <strong id="optDecision">HIT</strong></span>
+        <span id="badgeMatch" class="badge-match">✓ matches</span>
       </div>
 
-      <!-- Player & Agent Controls -->
-      <div class="section-box">
-        <span class="section-title">Control Terminal</span>
-
-        <div class="action-buttons">
-          <button id="btnHit" class="btn btn-hit">HIT (+ Card)</button>
-          <button id="btnStand" class="btn btn-stand">STAND</button>
-          <button id="btnAutoStep" class="btn btn-auto">🧠 Play Connectome Move</button>
-          <button id="btnNewHand" class="btn btn-new">Deal New Hand</button>
-        </div>
-
-        <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button id="btnAutoPlay" class="btn" style="flex: 1; background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; color: #60a5fa; font-size: 12px; padding: 8px;">
-            START AUTOPLAY
-          </button>
-          <button id="btnTrain" class="btn" style="flex: 1; background: rgba(168, 85, 247, 0.2); border: 1px solid #a855f7; color: #c084fc; font-size: 12px; padding: 8px;">
-            ⚡ Train 1,000 Hands
-          </button>
-        </div>
+      <div class="hud-footer">
+        Readout: DN (1,299 neurons), exact return -0.122 per hand
       </div>
+    </div>
 
-      <!-- Live Session Statistics -->
-      <div class="section-box">
-        <div class="stats-grid">
-          <div class="stat-item">
-            <div id="statWins" class="stat-num" style="color: #10b981;">0</div>
-            <div class="stat-title">WINS</div>
-          </div>
-          <div class="stat-item">
-            <div id="statLosses" class="stat-num" style="color: #ef4444;">0</div>
-            <div class="stat-title">LOSSES</div>
-          </div>
-          <div class="stat-item">
-            <div id="statPushes" class="stat-num" style="color: #f59e0b;">0</div>
-            <div class="stat-title">PUSHES</div>
-          </div>
-        </div>
-        <div style="text-align: center; margin-top: 8px; font-size: 12px; color: #94a3b8;">
-          Session Win Rate: <strong id="statWinRate" style="color: #38bdf8;">0.0%</strong>
-        </div>
-      </div>
+    <!-- Bottom-Right Scientific Disclaimer (Exact FlyJack Caption) -->
+    <div class="flyjack-caption">
+      Leg gestures are scripted animations selected by the model's decision. Brain activity is a cached simulation of the FlyWire connectome, magnified ~10x. Input is smell; visual input did not reach the central brain.
+    </div>
 
+  </main>
+
+  <!-- Help / Info Modal -->
+  <div id="helpModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <h3>🪰 How FlyJack Works</h3>
+      <p>
+        Inspired by computational neuroscience projects (like Mark Unthank's <strong>FlyHard</strong> in CARLA),
+        <strong>FlyJack</strong> connects the biological <em>Drosophila melanogaster</em> (fruit fly) connectome
+        directly to a casino Blackjack table.
+      </p>
+      <ul>
+        <li><strong>Sensory Input:</strong> Blackjack cards are translated into olfactory spike frequencies entering the fly's antennal lobe glomeruli (DA1, VA1d, VA1v).</li>
+        <li><strong>Biological Reservoir:</strong> The 140,000-neuron connectome remains completely frozen; recurrent Leaky Integrate-and-Fire (LIF) dynamics extract high-dimensional features.</li>
+        <li><strong>Embodied Decision:</strong> Descending motor neurons actuate the fly's physical foreleg gestures (tapping the felt for <em>HIT</em>, waving for <em>STAND</em>).</li>
+      </ul>
+      <button id="btnCloseHelp" class="btn-top btn-deal" style="margin-top: 16px;">Close</button>
     </div>
   </div>
 
   <!-- Scripts -->
+  <script src="/js/fly_audio.js"></script>
   <script src="/js/visualizer3d.js"></script>
+  <script src="/js/table3d.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>
