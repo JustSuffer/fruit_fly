@@ -437,6 +437,7 @@ class FlyJackTable3D {
     this.cardMeshes.push(card);
 
     setTimeout(() => {
+      if (!this.cardMeshes.includes(card)) return; // Hand was already cleared
       card.visible = true;
       // Add to smooth glide animation queue
       this.activeCardAnimations.push({
@@ -464,6 +465,9 @@ class FlyJackTable3D {
    * - On round end: smoothly reveals hidden dealer card and slides any dealer hit cards
    */
   renderCards(playerCards, dealerCards, isNewHand = false) {
+    playerCards = Array.isArray(playerCards) ? playerCards : [];
+    dealerCards = Array.isArray(dealerCards) ? dealerCards : [];
+
     if (
       isNewHand ||
       !this.currentHand.playerCards ||
@@ -510,6 +514,7 @@ class FlyJackTable3D {
 
       // 2. Check if dealer revealed the hidden hole card
       if (
+        this.currentHand.dealerCards &&
         this.currentHand.dealerCards[1] === "HIDDEN" &&
         dealerCards[1] &&
         dealerCards[1] !== "HIDDEN"

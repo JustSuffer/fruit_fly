@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FlyJack | Connectome > Fly > Blackjack Simulation</title>
-  <link rel="stylesheet" href="/css/style.css?v=20260920-v2">
+  <link rel="stylesheet" href="/css/style.css?v=3.0.0">
   <!-- Three.js & OrbitControls via CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -16,6 +16,8 @@
     <div class="bar-left">
       <div class="logo-pill">FlyJack</div>
       <button id="btnDeal" class="btn-top btn-deal">Deal</button>
+      <button id="btnHit" class="btn-top btn-hit">Hit</button>
+      <button id="btnStand" class="btn-top btn-stand">Stand</button>
       
       <label class="checkbox-container">
         <input type="checkbox" id="chkAutoPlay" checked>
@@ -137,6 +139,13 @@
         <span id="badgeMatch" class="badge-match">✓ matches</span>
       </div>
 
+      <!-- Interactive Action Buttons -->
+      <div class="hud-actions-row">
+        <button id="hudBtnHit" class="btn-hud-action btn-hud-hit">HIT (Fly Tap)</button>
+        <button id="hudBtnStand" class="btn-hud-action btn-hud-stand">STAND (Fly Wave)</button>
+        <button id="hudBtnDeal" class="btn-hud-action btn-hud-deal">DEAL</button>
+      </div>
+
       <div class="hud-footer">
         Readout: DN (1,299 neurons), exact return -0.122 per hand
       </div>
@@ -167,10 +176,11 @@
     </div>
   </div>
 
-  <!-- Scripts with cache busting -->
-  <script src="/js/fly_audio.js?v=20260920-v2"></script>
-  <script src="/js/visualizer3d.js?v=20260920-v2"></script>
-  <script src="/js/table3d.js?v=20260920-v2"></script>
-  <script src="/js/app.js?v=20260920-v2"></script>
+  <!-- Scripts with v3.0.0 cache busting -->
+  <script src="/js/fly_audio.js?v=3.0.0"></script>
+  <script src="/js/connectome_engine.js?v=3.0.0"></script>
+  <script src="/js/visualizer3d.js?v=3.0.0"></script>
+  <script src="/js/table3d.js?v=3.0.0"></script>
+  <script src="/js/app.js?v=3.0.0"></script>
 </body>
 </html>

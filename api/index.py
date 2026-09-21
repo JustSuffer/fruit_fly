@@ -57,6 +57,8 @@ class StepReq(BaseModel):
 
 
 @app.get("/api/connectome/metadata")
+@app.get("/connectome/metadata")
+@app.get("/metadata")
 def get_metadata():
     return {
         "num_neurons": BUNDLE_DATA["num_neurons"],
@@ -68,6 +70,8 @@ def get_metadata():
 
 
 @app.post("/api/game/new")
+@app.post("/game/new")
+@app.post("/new")
 def new_game():
     p_cards = [draw_card(), draw_card()]
     d_cards = [draw_card(), draw_card()]
@@ -134,6 +138,8 @@ def new_game():
 
 
 @app.post("/api/game/step")
+@app.post("/game/step")
+@app.post("/step")
 def step_game(req: StepReq):
     p_cards = GAME_STATE["player_cards"] or [draw_card(), draw_card()]
     d_cards = GAME_STATE["dealer_cards"] or [draw_card(), draw_card()]

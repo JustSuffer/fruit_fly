@@ -3,12 +3,14 @@
  * ======
  * Master Application Controller for FlyJack.
  * Coordinates the 3D Casino Table, the Embodied Drosophila Fly Agent,
- * the CNS Brain Monitor, procedural audio, and closed-loop autonomous gameplay.
+ * the CNS Brain Monitor, procedural audio, local Connectome engine,
+ * and both autonomous & interactive manual gameplay.
  */
 
 class FlyJackMaster {
   constructor() {
     this.audio = new FlyJackAudio();
+    this.engine = new ConnectomeBlackjackEngine();
     this.table3d = new FlyJackTable3D("table3d-container");
     this.cns3d = null; // Initialized when CNS is opened or in background
     this.cnsLoaded = false;
@@ -28,14 +30,17 @@ class FlyJackMaster {
     this.bindEvents();
     this.initCNSInBackground();
 
-    // Start simulation loop
+    // Start initial hand
     setTimeout(() => {
       this.dealNewHand();
     }, 600);
   }
 
   initDOM() {
+    // Top Bar Controls
     this.btnDeal = document.getElementById("btnDeal");
+    this.btnHit = document.getElementById("btnHit");
+    this.btnStand = document.getElementById("btnStand");
     this.chkAutoPlay = document.getElementById("chkAutoPlay");
     this.selSpeed = document.getElementById("selSpeed");
     this.btnSkip = document.getElementById("btnSkip");
@@ -46,11 +51,13 @@ class FlyJackMaster {
     this.helpModal = document.getElementById("helpModal");
     this.btnCloseHelp = document.getElementById("btnCloseHelp");
 
+    // Scoreboard
     this.bankrollValEl = document.getElementById("bankrollVal");
     this.statWEl = document.getElementById("statW");
     this.statDEl = document.getElementById("statD");
     this.statLEl = document.getElementById("statL");
 
+    // PiP Window
     this.cnsContainer = document.getElementById("cns-container");
     this.btnClosePip = document.getElementById("btnClosePip");
 
@@ -69,17 +76,47 @@ class FlyJackMaster {
     this.flyDecision = document.getElementById("flyDecision");
     this.optDecision = document.getElementById("optDecision");
     this.badgeMatch = document.getElementById("badgeMatch");
+
+    // HUD Action Buttons
+    this.hudBtnHit = document.getElementById("hudBtnHit");
+    this.hudBtnStand = document.getElementById("hudBtnStand");
+    this.hudBtnDeal = document.getElementById("hudBtnDeal");
   }
 
   bindEvents() {
-    this.btnDeal.addEventListener("click", () => {
+    // Deal Hand
+    const onDealClick = () => {
       this.dealNewHand();
-    });
+    };
+    if (this.btnDeal) this.btnDeal.addEventListener("click", onDealClick);
+    if (this.hudBtnDeal) this.hudBtnDeal.addEventListener("click", onDealClick);
 
+    // Hit Action (Fly physically taps leg and draws card)
+    const onHitClick = () => {
+      if (this.gameState && !this.gameState.done && !this.isStepping) {
+        this.executeFlyDecision("HIT");
+      }
+    };
+    if (this.btnHit) this.btnHit.addEventListener("click", onHitClick);
+    if (this.hudBtnHit) this.hudBtnHit.addEventListener("click", onHitClick);
+
+    // Stand Action (Fly physically waves forelegs and stands)
+    const onStandClick = () => {
+      if (this.gameState && !this.gameState.done && !this.isStepping) {
+        this.executeFlyDecision("STAND");
+      }
+    };
+    if (this.btnStand) this.btnStand.addEventListener("click", onStandClick);
+    if (this.hudBtnStand) this.hudBtnStand.addEventListener("click", onStandClick);
+
+    // Auto-Play toggle
     this.chkAutoPlay.addEventListener("change", (e) => {
       this.autoPlay = e.target.checked;
+      this.updateButtonStates();
       if (this.autoPlay && (!this.gameState || this.gameState.done)) {
         this.dealNewHand();
+      } else if (this.autoPlay && this.gameState && !this.gameState.done && !this.isStepping) {
+        this.executeFlyDecision();
       }
     });
 
@@ -89,7 +126,7 @@ class FlyJackMaster {
 
     this.btnSkip.addEventListener("click", () => {
       if (this.gameState && !this.gameState.done) {
-        this.executeFlyDecision(true); // Instant skip
+        this.executeFlyDecision(null, true); // Instant skip
       }
     });
 
@@ -128,6 +165,19 @@ class FlyJackMaster {
     });
   }
 
+  updateButtonStates() {
+    const isPlaying = this.gameState && !this.gameState.done && !this.isStepping;
+
+    if (this.btnHit) this.btnHit.disabled = !isPlaying;
+    if (this.btnStand) this.btnStand.disabled = !isPlaying;
+    if (this.hudBtnHit) this.hudBtnHit.disabled = !isPlaying;
+    if (this.hudBtnStand) this.hudBtnStand.disabled = !isPlaying;
+
+    const canDeal = !this.isStepping && (!this.gameState || this.gameState.done || !this.autoPlay);
+    if (this.btnDeal) this.btnDeal.disabled = !canDeal;
+    if (this.hudBtnDeal) this.hudBtnDeal.disabled = !canDeal;
+  }
+
   async initCNSInBackground() {
     try {
       this.cns3d = new ConnectomeVisualizer3D("cns3d-canvas");
@@ -138,7 +188,7 @@ class FlyJackMaster {
       } catch (e) {}
 
       if (!data) {
-        const bRes = await fetch("/bundle.json");
+        const bRes = await fetch("/bundle.json?v=3.0.0");
         data = await bRes.json();
       }
 
@@ -168,50 +218,70 @@ class FlyJackMaster {
 
     this.trialNumber++;
     this.hudTrial.innerText = this.trialNumber;
-    this.hudStateTitle.innerText = "Dealing...";
-    this.hudStateTitle.style.color = "#ffffff";
+    this.hudStateTitle.innerText = "Dealing cards...";
+    this.hudStateTitle.style.color = "#38bdf8";
     this.audio.playChip();
 
+    let data = null;
+
+    // Try backend API first
     try {
       const res = await fetch("/api/game/new", { method: "POST" });
-      const data = await res.json();
-      this.gameState = data;
-
-      const is21 = data.is_21 || data.player_total === 21;
-
-      // Deal fresh cards sliding from the card shoe
-      this.table3d.renderCards(data.player_cards, data.dealer_cards, true);
-      this.table3d.update3DScores(data.player_total, data.dealer_total, is21, data.done);
-      this.updateHUD(data);
-
-      if (this.cns3d && this.cns3d.triggerBiologicalWave) {
-        this.cns3d.triggerBiologicalWave();
+      if (res.ok) {
+        data = await res.json();
       }
+    } catch (e) {
+      console.warn("[FlyJack] /api/game/new fetch failed, falling back to local engine:", e);
+    }
 
-      if (data.done) {
-        // Natural 21 Blackjack on deal!
-        setTimeout(() => {
-          this.handleRoundFinish(data);
-        }, 900);
-      } else {
-        // Next step: Fly's autonomous turn
-        const delay = 950 / this.speedMultiplier;
+    // Rock-solid client-side engine fallback
+    if (!data || !data.player_cards || !Array.isArray(data.player_cards)) {
+      data = this.engine.newGame();
+    }
+
+    this.gameState = data;
+    this.updateButtonStates();
+
+    const is21 = data.is_21 || data.player_total === 21;
+
+    // Deal fresh cards sliding out from the card shoe in 3D
+    this.table3d.renderCards(data.player_cards, data.dealer_cards, true);
+    this.table3d.update3DScores(data.player_total, data.dealer_total, is21, data.done);
+    this.updateHUD(data);
+
+    if (this.cns3d && this.cns3d.triggerBiologicalWave) {
+      this.cns3d.triggerBiologicalWave();
+    }
+
+    if (data.done) {
+      // Natural 21 Blackjack on deal!
+      setTimeout(() => {
+        this.handleRoundFinish(data);
+      }, 950 / this.speedMultiplier);
+    } else {
+      if (this.autoPlay) {
+        // Fly's autonomous turn
+        const delay = 1000 / this.speedMultiplier;
         this.timerId = setTimeout(() => {
           this.executeFlyDecision();
         }, delay);
+      } else {
+        const pTotal = data.player_total;
+        const dUpcard = data.dealer_upcard;
+        this.hudStateTitle.innerText = `Fly's Turn (${pTotal} vs ${dUpcard}) - Click HIT or STAND`;
+        this.hudStateTitle.style.color = "#e2e8f0";
       }
-
-    } catch (err) {
-      console.error("[FlyJack] Deal error:", err);
     }
   }
 
-  async executeFlyDecision(skipAnimation = false) {
+  async executeFlyDecision(action = null, skipAnimation = false) {
     if (!this.gameState || this.gameState.done || this.isStepping) return;
     this.isStepping = true;
+    this.updateButtonStates();
 
-    const chosenAction = this.gameState.recommended_action || "HIT";
+    const chosenAction = action || this.gameState.recommended_action || "HIT";
     this.hudStateTitle.innerText = `Fly Deciding: ${chosenAction}`;
+    this.hudStateTitle.style.color = chosenAction === "HIT" ? "#60a5fa" : "#fbbf24";
 
     // Trigger CNS Brain Spikes in PiP window
     if (this.cns3d && this.cns3d.triggerBiologicalWave) {
@@ -219,35 +289,51 @@ class FlyJackMaster {
     }
 
     const onPhysicalActionComplete = async () => {
+      let data = null;
+
       try {
         const res = await fetch("/api/game/step", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: chosenAction }),
         });
-        const data = await res.json();
-        this.gameState = data;
-        this.isStepping = false;
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (e) {
+        console.warn("[FlyJack] /api/game/step fetch failed, falling back to local engine:", e);
+      }
 
-        const is21 = data.is_21 || data.player_total === 21;
+      // Rock-solid client-side engine fallback
+      if (!data || !data.player_cards || !Array.isArray(data.player_cards)) {
+        data = this.engine.step(chosenAction);
+      }
 
-        // Smooth incremental dealing (only slides the newly drawn card)
-        this.table3d.renderCards(data.player_cards, data.dealer_cards, false);
-        this.table3d.update3DScores(data.player_total, data.dealer_total, is21, data.done);
-        this.updateHUD(data);
+      this.gameState = data;
+      this.isStepping = false;
+      this.updateButtonStates();
 
-        if (data.done) {
-          this.handleRoundFinish(data);
-        } else {
+      const is21 = data.is_21 || data.player_total === 21;
+
+      // Smooth incremental dealing (only slides the newly drawn card)
+      this.table3d.renderCards(data.player_cards, data.dealer_cards, false);
+      this.table3d.update3DScores(data.player_total, data.dealer_total, is21, data.done);
+      this.updateHUD(data);
+
+      if (data.done) {
+        this.handleRoundFinish(data);
+      } else {
+        if (this.autoPlay) {
           // Continue fly's turn if hit didn't bust
           const delay = 1000 / this.speedMultiplier;
           this.timerId = setTimeout(() => {
             this.executeFlyDecision();
           }, delay);
+        } else {
+          const pTotal = data.player_total;
+          this.hudStateTitle.innerText = `Fly Total: ${pTotal} - Click HIT or STAND`;
+          this.hudStateTitle.style.color = "#e2e8f0";
         }
-      } catch (err) {
-        console.error("[FlyJack] Step error:", err);
-        this.isStepping = false;
       }
     };
 
@@ -305,10 +391,11 @@ class FlyJackMaster {
     }
 
     this.updateScoreboard();
+    this.updateButtonStates();
 
     // Auto-play next hand
     if (this.autoPlay) {
-      const waitTime = 2100 / this.speedMultiplier;
+      const waitTime = 2200 / this.speedMultiplier;
       this.timerId = setTimeout(() => {
         this.dealNewHand();
       }, waitTime);
@@ -316,11 +403,10 @@ class FlyJackMaster {
   }
 
   updateHUD(data) {
-    const pTotal = data.player_total || (data.player_cards ? data.player_cards.reduce((a, b) => a + b, 0) : 12);
-    const dUpcard = data.dealer_upcard || 7;
+    const pTotal = data.player_total || (data.player_cards ? data.player_cards.reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0) : 12);
+    const dUpcard = data.dealer_upcard || (Array.isArray(data.dealer_cards) && typeof data.dealer_cards[0] === 'number' ? data.dealer_cards[0] : 7);
     const isAce = data.usable_ace || false;
     const is21 = data.is_21 || pTotal === 21;
-    const isBJ = data.is_blackjack;
 
     // Biological Glomeruli Frequencies (DA1, VA1d, VA1v)
     const da1 = Math.min(150, Math.max(20, Math.round(50 + pTotal * 4.2)));

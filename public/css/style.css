@@ -78,8 +78,37 @@ body.flyjack-body {
   color: white;
 }
 
-.btn-deal:hover {
+.btn-deal:hover:not(:disabled) {
   background: #1d4ed8;
+}
+
+.btn-hit {
+  background: #059669;
+  border-color: #10b981;
+  color: white;
+}
+
+.btn-hit:hover:not(:disabled) {
+  background: #047857;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.btn-stand {
+  background: #d97706;
+  border-color: #f59e0b;
+  color: white;
+}
+
+.btn-stand:hover:not(:disabled) {
+  background: #b45309;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.btn-top:disabled, .btn-hud-action:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+  pointer-events: none;
 }
 
 /* Custom Checkbox */
@@ -358,6 +387,73 @@ body.flyjack-body {
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+/* Interactive Action Buttons in HUD */
+.hud-actions-row {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 6px 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-hud-action {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.btn-hud-hit {
+  background: #059669;
+  border-color: #10b981;
+  color: #ffffff;
+}
+.btn-hud-hit:hover:not(:disabled) {
+  background: #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.btn-hud-stand {
+  background: #d97706;
+  border-color: #f59e0b;
+  color: #ffffff;
+}
+.btn-hud-stand:hover:not(:disabled) {
+  background: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.btn-hud-deal {
+  background: #2563eb;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+.btn-hud-deal:hover:not(:disabled) {
+  background: #3b82f6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+.badge-blackjack-21 {
+  color: #34d399;
+  font-weight: 800;
+  text-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+  letter-spacing: 0.5px;
+}
+
+.badge-21 {
+  color: #38bdf8;
+  font-weight: 800;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+  letter-spacing: 0.5px;
 }
 
 .hud-footer {
