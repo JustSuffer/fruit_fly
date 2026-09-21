@@ -432,14 +432,12 @@ class FlyJackTable3D {
     const card = this.create3DCardMesh(val, isHidden);
     card.position.copy(this.SHOE_ORIGIN);
     card.rotation.set(0.2, -Math.PI * 0.22, 0);
-    card.visible = false;
+    card.visible = true;
     this.scene.add(card);
     this.cardMeshes.push(card);
 
-    setTimeout(() => {
+    const startFlight = () => {
       if (!this.cardMeshes.includes(card)) return; // Hand was already cleared
-      card.visible = true;
-      // Add to smooth glide animation queue
       this.activeCardAnimations.push({
         mesh: card,
         startPos: this.SHOE_ORIGIN.clone(),
@@ -447,13 +445,19 @@ class FlyJackTable3D {
         startRot: card.rotation.clone(),
         targetRotY: targetRotY,
         progress: 0.0,
-        duration: 0.38, // 380ms smooth flight
+        duration: 0.35, // 350ms smooth flight
       });
 
       if (window.flyjack && window.flyjack.audio) {
         window.flyjack.audio.playCardDeal();
       }
-    }, delayMs);
+    };
+
+    if (delayMs <= 0) {
+      startFlight();
+    } else {
+      setTimeout(startFlight, delayMs);
+    }
 
     return card;
   }

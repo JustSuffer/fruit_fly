@@ -30,10 +30,10 @@ class FlyJackMaster {
     this.bindEvents();
     this.initCNSInBackground();
 
-    // Start initial hand
+    // Start initial hand immediately
     setTimeout(() => {
       this.dealNewHand();
-    }, 600);
+    }, 100);
   }
 
   initDOM() {
@@ -212,7 +212,7 @@ class FlyJackMaster {
     }
   }
 
-  async dealNewHand() {
+  dealNewHand() {
     if (this.isStepping) return;
     clearTimeout(this.timerId);
 
@@ -222,23 +222,8 @@ class FlyJackMaster {
     this.hudStateTitle.style.color = "#38bdf8";
     this.audio.playChip();
 
-    let data = null;
-
-    // Try backend API first
-    try {
-      const res = await fetch("/api/game/new", { method: "POST" });
-      if (res.ok) {
-        data = await res.json();
-      }
-    } catch (e) {
-      console.warn("[FlyJack] /api/game/new fetch failed, falling back to local engine:", e);
-    }
-
-    // Rock-solid client-side engine fallback
-    if (!data || !data.player_cards || !Array.isArray(data.player_cards)) {
-      data = this.engine.newGame();
-    }
-
+    // Generate fresh connectome hand INSTANTLY (0ms) - completely immune to slow network/cold starts
+    const data = this.engine.newGame();
     this.gameState = data;
     this.updateButtonStates();
 
@@ -252,6 +237,11 @@ class FlyJackMaster {
     if (this.cns3d && this.cns3d.triggerBiologicalWave) {
       this.cns3d.triggerBiologicalWave();
     }
+
+    // Optional background sync with server
+    try {
+      fetch("/api/game/new", { method: "POST" }).catch(() => {});
+    } catch (e) {}
 
     if (data.done) {
       // Natural 21 Blackjack on deal!
@@ -274,7 +264,7 @@ class FlyJackMaster {
     }
   }
 
-  async executeFlyDecision(action = null, skipAnimation = false) {
+  executeFlyDecision(action = null, skipAnimation = false) {
     if (!this.gameState || this.gameState.done || this.isStepping) return;
     this.isStepping = true;
     this.updateButtonStates();
@@ -288,27 +278,9 @@ class FlyJackMaster {
       this.cns3d.triggerBiologicalWave();
     }
 
-    const onPhysicalActionComplete = async () => {
-      let data = null;
-
-      try {
-        const res = await fetch("/api/game/step", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: chosenAction }),
-        });
-        if (res.ok) {
-          data = await res.json();
-        }
-      } catch (e) {
-        console.warn("[FlyJack] /api/game/step fetch failed, falling back to local engine:", e);
-      }
-
-      // Rock-solid client-side engine fallback
-      if (!data || !data.player_cards || !Array.isArray(data.player_cards)) {
-        data = this.engine.step(chosenAction);
-      }
-
+    const onPhysicalActionComplete = () => {
+      // Step client-side engine with Drosophila Connectome state
+      const data = this.engine.step(chosenAction);
       this.gameState = data;
       this.isStepping = false;
       this.updateButtonStates();
@@ -319,6 +291,15 @@ class FlyJackMaster {
       this.table3d.renderCards(data.player_cards, data.dealer_cards, false);
       this.table3d.update3DScores(data.player_total, data.dealer_total, is21, data.done);
       this.updateHUD(data);
+
+      // Optional background sync
+      try {
+        fetch("/api/game/step", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: chosenAction }),
+        }).catch(() => {});
+      } catch (e) {}
 
       if (data.done) {
         this.handleRoundFinish(data);
