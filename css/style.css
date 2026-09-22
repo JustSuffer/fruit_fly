@@ -93,6 +93,17 @@ body.flyjack-body {
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
 }
 
+.btn-double {
+  background: #7c3aed;
+  border-color: #8b5cf6;
+  color: white;
+}
+
+.btn-double:hover:not(:disabled) {
+  background: #6d28d9;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+}
+
 .btn-stand {
   background: #d97706;
   border-color: #f59e0b;
@@ -331,6 +342,10 @@ body.flyjack-body {
   background: #60a5fa;
 }
 
+.fill-double {
+  background: #a855f7;
+}
+
 .q-val {
   width: 48px;
   text-align: right;
@@ -420,6 +435,16 @@ body.flyjack-body {
 .btn-hud-hit:hover:not(:disabled) {
   background: #10b981;
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.btn-hud-double {
+  background: #7c3aed;
+  border-color: #8b5cf6;
+  color: #ffffff;
+}
+.btn-hud-double:hover:not(:disabled) {
+  background: #8b5cf6;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
 }
 
 .btn-hud-stand {

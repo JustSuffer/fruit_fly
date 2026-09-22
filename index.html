@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FlyJack v3.1 | Connectome > Fly > Blackjack Simulation</title>
-  <link rel="stylesheet" href="/css/style.css?v=3.1.0">
+  <title>FlyJack v3.2 | Connectome > Fly > Blackjack Simulation</title>
+  <link rel="stylesheet" href="/css/style.css?v=3.2.0">
   <!-- Three.js & OrbitControls via CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -14,9 +14,10 @@
   <!-- Top Navigation & Control Bar (Exact FlyJack Aesthetic) -->
   <header class="flyjack-topbar">
     <div class="bar-left">
-      <div class="logo-pill">FlyJack v3.1</div>
+      <div class="logo-pill">FlyJack v3.2</div>
       <button id="btnDeal" class="btn-top btn-deal">Deal</button>
       <button id="btnHit" class="btn-top btn-hit">Hit</button>
+      <button id="btnDouble" class="btn-top btn-double">Double (x2)</button>
       <button id="btnStand" class="btn-top btn-stand">Stand</button>
       
       <label class="checkbox-container">
@@ -127,6 +128,14 @@
           <span id="valQHit" class="q-val">-0.438</span>
         </div>
 
+        <div class="q-meter-row">
+          <span class="q-label">Q(double)</span>
+          <div class="q-track">
+            <div id="barQDouble" class="q-fill fill-double" style="width: 45%;"></div>
+          </div>
+          <span id="valQDouble" class="q-val">-0.460</span>
+        </div>
+
         <div class="q-legend">
           <span><span class="legend-box box-fly"></span> fly's readout (-1 ... +1)</span>
           <span><span class="legend-box box-opt"></span> optimal play</span>
@@ -142,6 +151,7 @@
       <!-- Interactive Action Buttons -->
       <div class="hud-actions-row">
         <button id="hudBtnHit" class="btn-hud-action btn-hud-hit">HIT (Fly Tap)</button>
+        <button id="hudBtnDouble" class="btn-hud-action btn-hud-double">DOUBLE (2x Tap)</button>
         <button id="hudBtnStand" class="btn-hud-action btn-hud-stand">STAND (Fly Wave)</button>
         <button id="hudBtnDeal" class="btn-hud-action btn-hud-deal">DEAL</button>
       </div>
@@ -170,17 +180,17 @@
       <ul>
         <li><strong>Sensory Input:</strong> Blackjack cards are translated into olfactory spike frequencies entering the fly's antennal lobe glomeruli (DA1, VA1d, VA1v).</li>
         <li><strong>Biological Reservoir:</strong> The 140,000-neuron connectome remains completely frozen; recurrent Leaky Integrate-and-Fire (LIF) dynamics extract high-dimensional features.</li>
-        <li><strong>Embodied Decision:</strong> Descending motor neurons actuate the fly's physical foreleg gestures (tapping the felt for <em>HIT</em>, waving for <em>STAND</em>).</li>
+        <li><strong>Embodied Decision:</strong> Descending motor neurons actuate the fly's physical foreleg gestures (tapping the felt for <em>HIT</em>, double-tapping for <em>DOUBLE</em>, waving for <em>STAND</em>).</li>
       </ul>
       <button id="btnCloseHelp" class="btn-top btn-deal" style="margin-top: 16px;">Close</button>
     </div>
   </div>
 
-  <!-- Scripts with v3.1.0 cache busting -->
-  <script src="/js/fly_audio.js?v=3.1.0"></script>
-  <script src="/js/connectome_engine.js?v=3.1.0"></script>
-  <script src="/js/visualizer3d.js?v=3.1.0"></script>
-  <script src="/js/table3d.js?v=3.1.0"></script>
-  <script src="/js/app.js?v=3.1.0"></script>
+  <!-- Scripts with v3.2.0 cache busting -->
+  <script src="/js/fly_audio.js?v=3.2.0"></script>
+  <script src="/js/connectome_engine.js?v=3.2.0"></script>
+  <script src="/js/visualizer3d.js?v=3.2.0"></script>
+  <script src="/js/table3d.js?v=3.2.0"></script>
+  <script src="/js/app.js?v=3.2.0"></script>
 </body>
 </html>

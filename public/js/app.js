@@ -20,6 +20,7 @@ class FlyJackMaster {
     this.speedMultiplier = 1.0;
     this.trialNumber = 5;
     this.bankroll = 102;
+    this.currentBet = 10;
     this.stats = { w: 6, d: 3, l: 4 };
 
     this.gameState = null;
@@ -40,6 +41,7 @@ class FlyJackMaster {
     // Top Bar Controls
     this.btnDeal = document.getElementById("btnDeal");
     this.btnHit = document.getElementById("btnHit");
+    this.btnDouble = document.getElementById("btnDouble");
     this.btnStand = document.getElementById("btnStand");
     this.chkAutoPlay = document.getElementById("chkAutoPlay");
     this.selSpeed = document.getElementById("selSpeed");
@@ -72,6 +74,8 @@ class FlyJackMaster {
     this.valQStick = document.getElementById("valQStick");
     this.barQHit = document.getElementById("barQHit");
     this.valQHit = document.getElementById("valQHit");
+    this.barQDouble = document.getElementById("barQDouble");
+    this.valQDouble = document.getElementById("valQDouble");
 
     this.flyDecision = document.getElementById("flyDecision");
     this.optDecision = document.getElementById("optDecision");
@@ -79,6 +83,7 @@ class FlyJackMaster {
 
     // HUD Action Buttons
     this.hudBtnHit = document.getElementById("hudBtnHit");
+    this.hudBtnDouble = document.getElementById("hudBtnDouble");
     this.hudBtnStand = document.getElementById("hudBtnStand");
     this.hudBtnDeal = document.getElementById("hudBtnDeal");
   }
@@ -99,6 +104,15 @@ class FlyJackMaster {
     };
     if (this.btnHit) this.btnHit.addEventListener("click", onHitClick);
     if (this.hudBtnHit) this.hudBtnHit.addEventListener("click", onHitClick);
+
+    // Double Down Action (Fly rapidly double-taps leg, 2x bet, draws 1 card)
+    const onDoubleClick = () => {
+      if (this.gameState && !this.gameState.done && !this.isStepping && this.gameState.can_double) {
+        this.executeFlyDecision("DOUBLE");
+      }
+    };
+    if (this.btnDouble) this.btnDouble.addEventListener("click", onDoubleClick);
+    if (this.hudBtnDouble) this.hudBtnDouble.addEventListener("click", onDoubleClick);
 
     // Stand Action (Fly physically waves forelegs and stands)
     const onStandClick = () => {
@@ -167,10 +181,14 @@ class FlyJackMaster {
 
   updateButtonStates() {
     const isPlaying = this.gameState && !this.gameState.done && !this.isStepping;
+    const canDouble = isPlaying && Boolean(this.gameState && this.gameState.can_double);
 
     if (this.btnHit) this.btnHit.disabled = !isPlaying;
+    if (this.btnDouble) this.btnDouble.disabled = !canDouble;
     if (this.btnStand) this.btnStand.disabled = !isPlaying;
+
     if (this.hudBtnHit) this.hudBtnHit.disabled = !isPlaying;
+    if (this.hudBtnDouble) this.hudBtnDouble.disabled = !canDouble;
     if (this.hudBtnStand) this.hudBtnStand.disabled = !isPlaying;
 
     const canDeal = !this.isStepping && (!this.gameState || this.gameState.done || !this.autoPlay);
@@ -218,11 +236,17 @@ class FlyJackMaster {
 
     this.trialNumber++;
     this.hudTrial.innerText = this.trialNumber;
-    this.hudStateTitle.innerText = "Dealing cards...";
+    this.hudStateTitle.innerText = "Placing 10 Bet & Dealing...";
     this.hudStateTitle.style.color = "#38bdf8";
-    this.audio.playChip();
 
-    // Generate fresh connectome hand INSTANTLY (0ms) - completely immune to slow network/cold starts
+    // 1. Deduct initial 10-coin bet and animate chip flight into circle
+    this.currentBet = 10;
+    this.bankroll = Math.max(0, this.bankroll - 10);
+    this.updateScoreboard();
+    this.audio.playChip();
+    this.table3d.placeInitialBet();
+
+    // 2. Generate fresh connectome hand INSTANTLY (0ms) - completely immune to slow network/cold starts
     const data = this.engine.newGame();
     this.gameState = data;
     this.updateButtonStates();
@@ -258,7 +282,7 @@ class FlyJackMaster {
       } else {
         const pTotal = data.player_total;
         const dUpcard = data.dealer_upcard;
-        this.hudStateTitle.innerText = `Fly's Turn (${pTotal} vs ${dUpcard}) - Click HIT or STAND`;
+        this.hudStateTitle.innerText = `Fly's Turn (${pTotal} vs ${dUpcard}) - Click HIT, DOUBLE, or STAND`;
         this.hudStateTitle.style.color = "#e2e8f0";
       }
     }
@@ -270,8 +294,19 @@ class FlyJackMaster {
     this.updateButtonStates();
 
     const chosenAction = action || this.gameState.recommended_action || "HIT";
-    this.hudStateTitle.innerText = `Fly Deciding: ${chosenAction}`;
-    this.hudStateTitle.style.color = chosenAction === "HIT" ? "#60a5fa" : "#fbbf24";
+
+    if (chosenAction === "DOUBLE") {
+      this.currentBet = 20;
+      this.bankroll = Math.max(0, this.bankroll - 10); // 2nd 10-coin chip placed
+      this.updateScoreboard();
+      this.hudStateTitle.innerText = "Fly Doubling Down (2x Bet & Tap)!";
+      this.hudStateTitle.style.color = "#c084fc";
+      this.audio.playChip();
+      this.table3d.placeDoubleBet();
+    } else {
+      this.hudStateTitle.innerText = `Fly Deciding: ${chosenAction}`;
+      this.hudStateTitle.style.color = chosenAction === "HIT" ? "#60a5fa" : "#fbbf24";
+    }
 
     // Trigger CNS Brain Spikes in PiP window
     if (this.cns3d && this.cns3d.triggerBiologicalWave) {
@@ -323,10 +358,15 @@ class FlyJackMaster {
       return;
     }
 
-    // Physical Drosophila Body Movement - Fly acts as the real physical player!
+    // Physical Drosophila Body Movement - Fly acts as the real physical casino player!
     if (chosenAction === "HIT") {
       this.audio.playLegTap();
       this.table3d.triggerForelegTap(() => {
+        onPhysicalActionComplete();
+      });
+    } else if (chosenAction === "DOUBLE") {
+      this.audio.playLegTap();
+      this.table3d.triggerForelegDoubleTap(() => {
         onPhysicalActionComplete();
       });
     } else {
@@ -339,36 +379,55 @@ class FlyJackMaster {
   handleRoundFinish(data) {
     const is21 = data.is_21 || data.player_total === 21;
     const isBJ = data.is_blackjack;
+    const isDoubled = this.currentBet === 20;
 
     if (data.reward > 0) {
-      const winAmount = isBJ ? 15 : 10;
-      this.bankroll += winAmount;
-      this.stats.w++;
+      let winProfit = this.currentBet;
       if (isBJ) {
-        this.hudStateTitle.innerHTML = `<span class="badge-blackjack-21">★ 21 BLACKJACK! (+15) ★</span>`;
+        winProfit = Math.round(this.currentBet * 1.5);
+      }
+      const returnTotal = this.currentBet + winProfit;
+      this.bankroll += returnTotal;
+      this.stats.w++;
+
+      if (isBJ) {
+        this.hudStateTitle.innerHTML = `<span class="badge-blackjack-21">★ 21 BLACKJACK! (+${winProfit}) ★</span>`;
         this.hudStateTitle.style.color = "#34d399";
+      } else if (isDoubled) {
+        this.hudStateTitle.innerHTML = `<span class="badge-21" style="border-color:#c084fc; color:#c084fc;">★ DOUBLE DOWN WIN! (+${winProfit}) ★</span>`;
+        this.hudStateTitle.style.color = "#c084fc";
       } else if (is21) {
-        this.hudStateTitle.innerHTML = `<span class="badge-21">★ 21 WIN! (+10) ★</span>`;
+        this.hudStateTitle.innerHTML = `<span class="badge-21">★ 21 WIN! (+${winProfit}) ★</span>`;
         this.hudStateTitle.style.color = "#34d399";
       } else {
-        this.hudStateTitle.innerText = `Fly Wins! (+${winAmount})`;
+        this.hudStateTitle.innerText = `Fly Wins! (+${winProfit})`;
         this.hudStateTitle.style.color = "#34d399";
       }
       this.audio.playWin();
+      this.table3d.winChipsToPlayer(isBJ ? 1.5 : 1.0);
     } else if (data.reward < 0) {
-      this.bankroll -= 10;
       this.stats.l++;
       if (data.player_total > 21) {
-        this.hudStateTitle.innerText = `Fly Busts (${data.player_total}) - Dealer Wins`;
+        this.hudStateTitle.innerText = `Fly Busts (${data.player_total}) - Dealer Wins (-${this.currentBet})`;
       } else {
-        this.hudStateTitle.innerText = "Dealer Wins (-10)";
+        this.hudStateTitle.innerText = `Dealer Wins (-${this.currentBet})`;
       }
       this.hudStateTitle.style.color = "#f87171";
+      this.table3d.collectChipsDealer();
     } else {
+      // Push (Tie) - original bet returned
+      this.bankroll += this.currentBet;
       this.stats.d++;
-      this.hudStateTitle.innerText = is21 ? "Push (Both 21)" : "Push (Tie)";
+      this.hudStateTitle.innerText = is21 ? "Push (Both 21) - Bet Returned" : "Push (Tie) - Bet Returned";
       this.hudStateTitle.style.color = "#fbbf24";
       this.audio.playChip();
+      this.table3d.pushChipsToPlayer();
+    }
+
+    // Nectar Stipend Refill if depleted
+    if (this.bankroll < 10) {
+      this.bankroll += 100;
+      this.hudStateTitle.innerText += " • Nectar Stipend: +100 Coins!";
     }
 
     this.updateScoreboard();
@@ -376,7 +435,7 @@ class FlyJackMaster {
 
     // Auto-play next hand
     if (this.autoPlay) {
-      const waitTime = 2200 / this.speedMultiplier;
+      const waitTime = 2300 / this.speedMultiplier;
       this.timerId = setTimeout(() => {
         this.dealNewHand();
       }, waitTime);
@@ -401,16 +460,20 @@ class FlyJackMaster {
     // Q-values
     const qStand = (data.q_values && data.q_values.STAND !== undefined) ? data.q_values.STAND : -0.491;
     const qHit = (data.q_values && data.q_values.HIT !== undefined) ? data.q_values.HIT : -0.438;
+    const qDouble = (data.q_values && data.q_values.DOUBLE !== undefined) ? data.q_values.DOUBLE : -0.520;
 
     this.valQStick.innerText = qStand.toFixed(3);
     this.valQHit.innerText = qHit.toFixed(3);
+    if (this.valQDouble) this.valQDouble.innerText = qDouble.toFixed(3);
 
     // Normalize Q-meters for bar width (-1.0 ... +1.0)
     const normStick = Math.max(5, Math.min(100, ((qStand + 1.0) / 2.0) * 100));
     const normHit = Math.max(5, Math.min(100, ((qHit + 1.0) / 2.0) * 100));
+    const normDouble = Math.max(5, Math.min(100, ((qDouble + 1.0) / 2.0) * 100));
 
     this.barQStick.style.width = `${normStick}%`;
     this.barQHit.style.width = `${normHit}%`;
+    if (this.barQDouble) this.barQDouble.style.width = `${normDouble}%`;
 
     // Decisions & 21 Banner
     const act = data.next_recommendation || data.recommended_action || data.action_taken || "HIT";

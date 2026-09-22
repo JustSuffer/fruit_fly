@@ -50,11 +50,18 @@ class FlyJackTable3D {
     this.wingsGroup = null;
     this.abdomenMesh = null;
 
+    // Dynamic Betting Chips & Animations
+    this.bettingChipsGroup = new THREE.Group();
+    this.scene.add(this.bettingChipsGroup);
+    this.activeChipAnimations = [];
+
     // Animation & Card Flight Tracking
     this.clock = new THREE.Clock();
     this.activeCardAnimations = [];
     this.isTapping = false;
     this.tapPhase = 0.0;
+    this.isDoubleTapping = false;
+    this.doubleTapPhase = 0.0;
     this.isWaving = false;
     this.wavePhase = 0.0;
 
@@ -147,7 +154,7 @@ class FlyJackTable3D {
     ctx.fillStyle = "rgba(245, 225, 155, 0.95)";
     ctx.textAlign = "center";
     ctx.letterSpacing = "6px";
-    ctx.fillText("BLACKJACK-V1  •  NO DOUBLING  •  NO SPLITTING", 0, -750);
+    ctx.fillText("BLACKJACK-V2  •  DOUBLING ALLOWED  •  PAYS 3 TO 2", 0, -750);
 
     ctx.font = "900 46px -apple-system, BlinkMacSystemFont, Arial, sans-serif";
     ctx.fillStyle = "rgba(255, 235, 165, 0.98)";
@@ -185,8 +192,8 @@ class FlyJackTable3D {
     // 3. Stacks of Poker Chips (Safely placed in Upper-Left Corner: X = -85 to -55, Z = -45)
     this.buildChipStacks();
 
-    // 4. Betting Chip (Accurately co-centered with the circle at X: -32, Z: 20)
-    this.buildBettingChip(-33.0, 0.75, 20.0);
+    // 4. Dynamic Interactive Betting Chip in circle (X: -33, Z: 20)
+    this.placeInitialBet();
 
     // 5. Card Shoe (Angled in Upper-Right at X: 42, Z: -55)
     this.buildCardShoe();
@@ -219,21 +226,241 @@ class FlyJackTable3D {
     });
   }
 
-  buildBettingChip(x, y, z) {
+  /**
+   * Create an authentic casino chip with embossed circular markings and value stamp
+   */
+  createSingleChipMesh(color = 0xe11d48, ringColor = 0xffffff, text = "10") {
+    const group = new THREE.Group();
     const chipGeo = new THREE.CylinderGeometry(5.2, 5.2, 1.5, 32);
-    const chipMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.35, metalness: 0.15 });
-    const chip = new THREE.Mesh(chipGeo, chipMat);
-    chip.position.set(x, y, z);
-    chip.castShadow = true;
-    chip.receiveShadow = true;
-    this.scene.add(chip);
+    const chipMat = new THREE.MeshStandardMaterial({
+      color: color,
+      roughness: 0.32,
+      metalness: 0.18,
+    });
+    const cylinder = new THREE.Mesh(chipGeo, chipMat);
+    cylinder.castShadow = true;
+    cylinder.receiveShadow = true;
+    group.add(cylinder);
 
-    const ringGeo = new THREE.RingGeometry(2.2, 3.4, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(x, y + 0.76, z);
-    this.scene.add(ring);
+    // Decorative Casino Inset Ring with Text Badge
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, 128, 128);
+
+    // Inset border ring
+    ctx.strokeStyle = ringColor === 0xffffff ? "#ffffff" : "#fbbf24";
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(64, 64, 48, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Dotted inner ring
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(64, 64, 36, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Value text
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 34px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 64, 65);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    const ringMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
+    const ringGeo = new THREE.PlaneGeometry(8.2, 8.2);
+
+    const topFace = new THREE.Mesh(ringGeo, ringMat);
+    topFace.rotation.x = -Math.PI / 2;
+    topFace.position.y = 0.77;
+    group.add(topFace);
+
+    const btmFace = new THREE.Mesh(ringGeo, ringMat);
+    btmFace.rotation.x = Math.PI / 2;
+    btmFace.position.y = -0.77;
+    group.add(btmFace);
+
+    return group;
+  }
+
+  clearBettingChips() {
+    while (this.bettingChipsGroup.children.length > 0) {
+      this.bettingChipsGroup.remove(this.bettingChipsGroup.children[0]);
+    }
+    this.activeChipAnimations = [];
+  }
+
+  /**
+   * Slides an initial 10-coin bet from player's side into the betting circle
+   */
+  placeInitialBet(onComplete) {
+    this.clearBettingChips();
+    const chip = this.createSingleChipMesh(0xe11d48, 0xffffff, "10");
+    const startPos = new THREE.Vector3(-48.0, 2.0, 42.0);
+    const targetPos = new THREE.Vector3(-33.0, 0.75, 20.0);
+    chip.position.copy(startPos);
+    this.bettingChipsGroup.add(chip);
+
+    this.activeChipAnimations.push({
+      mesh: chip,
+      startPos: startPos.clone(),
+      targetPos: targetPos.clone(),
+      startRot: new THREE.Vector3(0, 0, 0),
+      targetRot: new THREE.Vector3(0, Math.PI * 2, 0),
+      duration: 0.45,
+      progress: 0.0,
+      arcHeight: 5.5,
+      onComplete: onComplete,
+    });
+  }
+
+  /**
+   * Double Down: Slides a 2nd chip that stacks cleanly on top of the 1st chip
+   */
+  placeDoubleBet(onComplete) {
+    const chip2 = this.createSingleChipMesh(0x9333ea, 0xfbbf24, "20");
+    const startPos = new THREE.Vector3(-48.0, 2.0, 42.0);
+    const targetPos = new THREE.Vector3(-33.0, 2.25, 20.0);
+    chip2.position.copy(startPos);
+    this.bettingChipsGroup.add(chip2);
+
+    this.activeChipAnimations.push({
+      mesh: chip2,
+      startPos: startPos.clone(),
+      targetPos: targetPos.clone(),
+      startRot: new THREE.Vector3(0, 0, 0),
+      targetRot: new THREE.Vector3(0, Math.PI * 2, 0),
+      duration: 0.45,
+      progress: 0.0,
+      arcHeight: 6.0,
+      onComplete: onComplete,
+    });
+  }
+
+  /**
+   * Collects lost bet into the dealer's tray
+   */
+  collectChipsDealer(onComplete) {
+    const chips = [...this.bettingChipsGroup.children];
+    if (chips.length === 0) {
+      if (onComplete) onComplete();
+      return;
+    }
+
+    const dealerTrayPos = new THREE.Vector3(0.0, 4.0, -56.0);
+    let completedCount = 0;
+
+    chips.forEach((chip, idx) => {
+      this.activeChipAnimations.push({
+        mesh: chip,
+        startPos: chip.position.clone(),
+        targetPos: dealerTrayPos.clone().add(new THREE.Vector3(idx * 2.0, 0, 0)),
+        startRot: new THREE.Vector3(0, 0, 0),
+        targetRot: new THREE.Vector3(0, Math.PI, 0),
+        duration: 0.55,
+        progress: 0.0,
+        arcHeight: 3.5,
+        onComplete: () => {
+          completedCount++;
+          if (completedCount === chips.length) {
+            this.clearBettingChips();
+            if (onComplete) onComplete();
+          }
+        },
+      });
+    });
+  }
+
+  /**
+   * Dealer pays out winnings: slides matching chips to circle, then entire stack slides to player
+   */
+  winChipsToPlayer(payoutMultiplier = 1, onComplete) {
+    const existingChips = [...this.bettingChipsGroup.children];
+    const playerBankrollPos = new THREE.Vector3(-48.0, 2.0, 42.0);
+    const dealerTrayPos = new THREE.Vector3(0.0, 4.0, -56.0);
+
+    const rewardCount = Math.max(1, Math.round(existingChips.length * payoutMultiplier));
+
+    for (let i = 0; i < rewardCount; i++) {
+      const rewChip = this.createSingleChipMesh(0x059669, 0xfbbf24, "WIN");
+      rewChip.position.copy(dealerTrayPos);
+      this.bettingChipsGroup.add(rewChip);
+
+      const stackY = 0.75 + (existingChips.length + i) * 1.5;
+      const targetInCircle = new THREE.Vector3(-33.0, stackY, 20.0);
+
+      this.activeChipAnimations.push({
+        mesh: rewChip,
+        startPos: dealerTrayPos.clone(),
+        targetPos: targetInCircle,
+        startRot: new THREE.Vector3(0, 0, 0),
+        targetRot: new THREE.Vector3(0, Math.PI * 2, 0),
+        duration: 0.38,
+        progress: 0.0,
+        arcHeight: 3.0,
+      });
+    }
+
+    setTimeout(() => {
+      const allChips = [...this.bettingChipsGroup.children];
+      let done = 0;
+      allChips.forEach((c) => {
+        this.activeChipAnimations.push({
+          mesh: c,
+          startPos: c.position.clone(),
+          targetPos: playerBankrollPos.clone(),
+          startRot: new THREE.Vector3(0, 0, 0),
+          targetRot: new THREE.Vector3(0, Math.PI * 2, 0),
+          duration: 0.48,
+          progress: 0.0,
+          arcHeight: 5.5,
+          onComplete: () => {
+            done++;
+            if (done === allChips.length) {
+              this.clearBettingChips();
+              if (onComplete) onComplete();
+            }
+          },
+        });
+      });
+    }, 420);
+  }
+
+  /**
+   * Push (Tie): Returns current bet chips back to player
+   */
+  pushChipsToPlayer(onComplete) {
+    const chips = [...this.bettingChipsGroup.children];
+    if (chips.length === 0) {
+      if (onComplete) onComplete();
+      return;
+    }
+    const playerBankrollPos = new THREE.Vector3(-48.0, 2.0, 42.0);
+    let done = 0;
+    chips.forEach((c) => {
+      this.activeChipAnimations.push({
+        mesh: c,
+        startPos: c.position.clone(),
+        targetPos: playerBankrollPos.clone(),
+        startRot: new THREE.Vector3(0, 0, 0),
+        targetRot: new THREE.Vector3(0, Math.PI * 2, 0),
+        duration: 0.45,
+        progress: 0.0,
+        arcHeight: 4.5,
+        onComplete: () => {
+          done++;
+          if (done === chips.length) {
+            this.clearBettingChips();
+            if (onComplete) onComplete();
+          }
+        },
+      });
+    });
   }
 
   buildCardShoe() {
@@ -718,6 +945,15 @@ class FlyJackTable3D {
   }
 
   /**
+   * Fly Rapidly Double Taps Table (DOUBLE DOWN)
+   */
+  triggerForelegDoubleTap(onComplete) {
+    this.isDoubleTapping = true;
+    this.doubleTapPhase = 0.0;
+    this.onDoubleTapComplete = onComplete;
+  }
+
+  /**
    * Fly Physically Waves Forelegs (STAND)
    */
   triggerForelegWave(onComplete) {
@@ -763,7 +999,30 @@ class FlyJackTable3D {
       }
     }
 
-    // 3. Foreleg Tap Animation (Casino HIT)
+    // 3. Smooth 3D Betting Chip Flight Arc Animations
+    for (let i = this.activeChipAnimations.length - 1; i >= 0; i--) {
+      const anim = this.activeChipAnimations[i];
+      anim.progress += dt / anim.duration;
+      const t = Math.min(1.0, anim.progress);
+      const ease = 1 - Math.pow(1 - t, 3);
+      const arcY = Math.sin(t * Math.PI) * (anim.arcHeight || 4.5);
+
+      anim.mesh.position.lerpVectors(anim.startPos, anim.targetPos, ease);
+      anim.mesh.position.y += arcY;
+
+      if (anim.startRot && anim.targetRot) {
+        anim.mesh.rotation.y = THREE.MathUtils.lerp(anim.startRot.y, anim.targetRot.y, ease);
+      }
+
+      if (t >= 1.0) {
+        anim.mesh.position.copy(anim.targetPos);
+        if (anim.targetRot) anim.mesh.rotation.y = anim.targetRot.y;
+        this.activeChipAnimations.splice(i, 1);
+        if (anim.onComplete) anim.onComplete();
+      }
+    }
+
+    // 4. Foreleg Single Tap Animation (Casino HIT)
     if (this.isTapping && this.forelegPivotR) {
       this.tapPhase += 0.055;
       const angle = Math.sin(this.tapPhase * Math.PI * 2.0);
@@ -778,7 +1037,23 @@ class FlyJackTable3D {
       }
     }
 
-    // 4. Foreleg Wave Animation (Casino STAND)
+    // 5. Foreleg Double Tap Animation (Casino DOUBLE DOWN)
+    if (this.isDoubleTapping && this.forelegPivotR) {
+      this.doubleTapPhase += 0.085; // Faster cadence for crisp double tap
+      const cycle = this.doubleTapPhase * Math.PI * 4.0; // 2 complete tap cycles
+      const angle = Math.sin(cycle);
+      if (this.doubleTapPhase < 1.0) {
+        this.forelegPivotR.rotation.x = Math.max(0, -angle * 0.7);
+        this.forelegPivotR.position.y = -0.2 + Math.max(0, angle * 2.8);
+      } else {
+        this.isDoubleTapping = false;
+        this.forelegPivotR.rotation.x = 0;
+        this.forelegPivotR.position.y = -0.2;
+        if (this.onDoubleTapComplete) this.onDoubleTapComplete();
+      }
+    }
+
+    // 6. Foreleg Wave Animation (Casino STAND)
     if (this.isWaving && this.forelegPivotR && this.forelegPivotL) {
       this.wavePhase += 0.04;
       const wave = Math.sin(this.wavePhase * Math.PI * 3.0);
